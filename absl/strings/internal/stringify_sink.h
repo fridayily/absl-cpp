@@ -43,6 +43,11 @@ class StringifySink {
   std::string buffer_;
 };
 
+// 将任意类型T的对象v转换为字符串，并存储在StringifySink实例中，
+// 最后返回该字符串的string_view表示。
+
+// AbslStringify和 absl/time/civil_time.h 不是一个函数
+// 而是定义在 absl/status/status.h 中
 template <typename T>
 string_view ExtractStringification(StringifySink& sink, const T& v) {
   AbslStringify(sink, v);

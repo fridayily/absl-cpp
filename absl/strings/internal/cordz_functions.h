@@ -26,7 +26,7 @@ ABSL_NAMESPACE_BEGIN
 namespace cord_internal {
 
 // Returns the current sample rate. This represents the average interval
-// between samples.
+// between samples. 样本间的平均间隔
 int32_t get_cordz_mean_interval();
 
 // Sets the sample rate with the average interval between samples.

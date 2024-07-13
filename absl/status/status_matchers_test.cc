@@ -43,8 +43,20 @@ TEST(StatusMatcherTest, StatusIsNotOk) {
   EXPECT_NONFATAL_FAILURE(EXPECT_THAT(error, IsOk()), "Smigla");
 }
 
+TEST(EXCEPT,EQ){
+  EXPECT_NONFATAL_FAILURE({
+    EXPECT_EQ(1, 2);
+  }, " except nonfatal failure message");
+}
+
+
+// EXPECT_NONFATAL_FAILURE({
+//    这里放置预期会产生 EXPECT_* 失败的代码
+//    例如: EXPECT_EQ(1, 2);
+//  }, "预期的错误信息");
 TEST(StatusMatcherTest, StatusOrIsNotOk) {
   absl::StatusOr<int> error = absl::UnknownError("Smigla");
+  EXPECT_THAT(error, IsOk());
   EXPECT_NONFATAL_FAILURE(EXPECT_THAT(error, IsOk()), "Smigla");
 }
 

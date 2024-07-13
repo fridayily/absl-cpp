@@ -40,12 +40,15 @@ static_assert(!absl::type_traits_internal::IsOwner<absl::Span<int>>::value &&
                   absl::type_traits_internal::IsView<absl::Span<int>>::value,
               "Span is a view, not an owner");
 
+// 它接受一个参数data，并用于比较一个对象的data()成员函数返回值与给定的data参数是否相等
 MATCHER_P(DataIs, data,
           absl::StrCat("data() ", negation ? "isn't " : "is ",
                        testing::PrintToString(data))) {
+  // arg 指当前被测试对象
   return arg.data() == data;
 }
 
+//
 template <typename T>
 auto SpanIs(T data, size_t size)
     -> decltype(testing::AllOf(DataIs(data), testing::SizeIs(size))) {

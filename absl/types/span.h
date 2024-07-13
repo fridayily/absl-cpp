@@ -150,6 +150,8 @@ ABSL_NAMESPACE_BEGIN
 //   // Explicit constructor from pointer,size
 //   int* my_array = new int[10];
 //   MyRoutine(absl::Span<const int>(my_array, 10));
+// absl::span 是 Abseil 库中提供的一种视图类型，
+// 它代表一个连续的内存区域，通常用于表示数组或容器的一部分，而不需要实际复制数据
 template <typename T>
 class Span {
  private:

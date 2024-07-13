@@ -127,6 +127,10 @@ struct is_detected_convertible
 // NOTE: `absl::void_t` does not use the standard-specified implementation so
 // that it can remain compatible with gcc < 5.1. This can introduce slightly
 // different behavior, such as when ordering partial specializations.
+// 如果考虑type_traits_internal::VoidTImpl<Ts...>::type内部实现，
+// 它也可能包含对依赖类型名称的使用，这时也会需要typename关键字来指示嵌套的类型名称。
+// 例如，如果VoidTImpl内部定义了如typename InnerType<T>::type这样的类型别名，
+// 那么这里的typename同样起到了告知编译器InnerType<T>::type是一个类型而非值的作用。
 template <typename... Ts>
 using void_t = typename type_traits_internal::VoidTImpl<Ts...>::type;
 
@@ -161,10 +165,17 @@ struct conjunction<T> : T {};
 template <typename... Ts>
 struct disjunction : std::false_type {};
 
+// T.value 是 true 时，返回的类型为 T，否则返回 disjunction<Ts...>
+// std::disjunction 它检查多个类型特质表达式，并在至少一个表达式为真
+// （即类型特质判断为真）时返回 true_type，否则返回false_type
+
+// 如果T::value为真（即T代表的条件满足），则disjunction的类型就是T本身。
+// 否则，递归调用disjunction<Ts...>继续检查剩余的类型特质
 template <typename T, typename... Ts>
 struct disjunction<T, Ts...>
     : std::conditional<T::value, T, disjunction<Ts...>>::type {};
 
+// 当只有一个类型特质T时，直接继承T，这简化了递归链的最后一个步骤，
 template <typename T>
 struct disjunction<T> : T {};
 
@@ -175,6 +186,9 @@ struct disjunction<T> : T {};
 //
 // This metafunction is designed to be a drop-in replacement for the C++17
 // `std::negation` metafunction.
+
+// negation模板提供了一种简洁的方式来反转任何具有value成员的类型特质的布尔结果
+//   using false_type = integral_constant<bool, false>;
 template <typename T>
 struct negation : std::integral_constant<bool, !T::value> {};
 
@@ -580,6 +594,12 @@ struct IsOwnerImpl : std::false_type {
                 "type must lack qualifiers");
 };
 
+// 利用了std::enable_if_t和std::is_class来检查T是否有内部成员类型
+// absl_internal_is_view，并且这个类型必须是一个类类型（class type）
+// 如果T确实定义了这样一个类类型的absl_internal_is_view成员，则此特化生效，
+// 此时IsOwnerImpl的最终类型依据absl::negation<typename T::absl_internal_is_view>来确定
+// 这意味着如果T::absl_internal_is_view是std::true_type，
+// 则IsOwnerImpl<T>就是std::false_type（因为它是一个视图），反之亦然
 template <typename T>
 struct IsOwnerImpl<
     T,
@@ -593,12 +613,19 @@ struct IsOwnerImpl<
 // that it can be auto-detected, and to prevent ODR violations.
 // If it ever becomes possible to detect [[gsl::Owner]], we should leverage it:
 // https://wg21.link/p1179
+// 用于判断给定类型T是否具有所有权（owner type），
+// 即类型是否管理它所持有的资源的生命周期，如内存分配和释放。
 template <typename T>
 struct IsOwner : IsOwnerImpl<T> {};
 
+// 这个特化版本覆盖了所有std::basic_string的实例，不论其字符类型T、字符特征Traits或
+// 分配器Alloc为何。这里明确指定std::basic_string是一个拥有类型，
+// 即它管理其内部存储的内存资源。
 template <typename T, typename Traits, typename Alloc>
 struct IsOwner<std::basic_string<T, Traits, Alloc>> : std::true_type {};
 
+// 这个特化版本覆盖了所有std::vector实例，不论元素类型T或分配器Alloc。
+// 它同样断言std::vector是一个拥有类型，因为它负责动态数组的内存分配和释放。
 template <typename T, typename Alloc>
 struct IsOwner<std::vector<T, Alloc>> : std::true_type {};
 
@@ -612,6 +639,7 @@ struct IsViewImpl : std::false_type {
                 "type must lack qualifiers");
 };
 
+// 当类型T有一个类类型的成员absl_internal_is_view时，这个特化版本生效。
 template <typename T>
 struct IsViewImpl<
     T,

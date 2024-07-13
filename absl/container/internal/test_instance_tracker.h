@@ -157,6 +157,8 @@ class BaseCountedInstance {
 // Helper to track the BaseCountedInstance instance counters. Expects that the
 // number of instances and live_instances are the same when it is constructed
 // and when it is destructed.
+// InstanceTracker 是 BaseCountedInstance 的友元，所以可以访问 BaseCountedInstance
+// 的成员变量
 class InstanceTracker {
  public:
   InstanceTracker()

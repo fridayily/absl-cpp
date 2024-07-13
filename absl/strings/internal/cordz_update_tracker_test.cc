@@ -117,27 +117,32 @@ TEST(CordzUpdateTracker, ThreadSanitizedValueCheck) {
   absl::Notification done;
   CordzUpdateTracker tracker;
 
+  // Reader Thread
   std::thread reader([&done, &tracker] {
     while (!done.HasBeenNotified()) {
       int n = 1;
       for (Method method : AllMethods()) {
+        // 期望值为 n 或 0（可能由于“有损”更新导致）
         EXPECT_THAT(tracker.Value(method), AnyOf(Eq(n), Eq(0)));
         n += 2;
       }
     }
     int n = 1;
     for (Method method : AllMethods()) {
+      // 期望值严格等于 n
       EXPECT_THAT(tracker.Value(method), Eq(n));
       n += 2;
     }
   });
 
+  // Writer Thread
   int64_t n = 1;
   for (Method method : AllMethods()) {
+    // 对于每个方法，调用 tracker.LossyAdd(method, n) 来模拟更新操作，并将计数值增加
     tracker.LossyAdd(method, n);
     n += 2;
   }
-  done.Notify();
+  done.Notify(); // 通知读者线程测试阶段完成。
   reader.join();
 }
 

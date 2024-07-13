@@ -201,8 +201,8 @@ void StrAppend(absl::Nonnull<std::string*> dest, const AlphaNum& a,
   STLStringAppendUninitializedAmortized(dest, a.size() + b.size());
   char* const begin = &(*dest)[0];
   char* out = begin + old_size;
-  out = Append(out, a);
-  out = Append(out, b);
+  out = Append(out, a); // 添加 a 元素
+  out = Append(out, b); // 添加 b 元素
   assert(out == begin + dest->size());
 }
 

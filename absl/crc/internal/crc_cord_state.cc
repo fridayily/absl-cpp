@@ -24,6 +24,7 @@ namespace absl {
 ABSL_NAMESPACE_BEGIN
 namespace crc_internal {
 
+// 通过移动构造对象，原对象都会指向同一个空的 RefcountedRep 对象
 CrcCordState::RefcountedRep* CrcCordState::RefSharedEmptyRep() {
   static absl::NoDestructor<CrcCordState::RefcountedRep> empty;
 
@@ -36,7 +37,7 @@ CrcCordState::RefcountedRep* CrcCordState::RefSharedEmptyRep() {
 }
 
 CrcCordState::CrcCordState() : refcounted_rep_(new RefcountedRep) {}
-
+// 拷贝构造函数创建出来的对象和传入的参数对象指向同一个引用计数
 CrcCordState::CrcCordState(const CrcCordState& other)
     : refcounted_rep_(other.refcounted_rep_) {
   Ref(refcounted_rep_);
@@ -50,8 +51,12 @@ CrcCordState::CrcCordState(CrcCordState&& other)
 
 CrcCordState& CrcCordState::operator=(const CrcCordState& other) {
   if (this != &other) {
+    // 拷贝赋值的前提是被赋值对象已经构造好了
+    // 原来对象的引用计数减1
     Unref(refcounted_rep_);
+    // 指向 other 对象的引用
     refcounted_rep_ = other.refcounted_rep_;
+    // 被赋值对象引用计数加1
     Ref(refcounted_rep_);
   }
   return *this;
@@ -62,11 +67,14 @@ CrcCordState& CrcCordState::operator=(CrcCordState&& other) {
     Unref(refcounted_rep_);
     refcounted_rep_ = other.refcounted_rep_;
     // Make `other` valid for use after move.
+    // 所有移动后的对象都指向同一个空的 RefcountedRep 对象
     other.refcounted_rep_ = RefSharedEmptyRep();
   }
   return *this;
 }
 
+// 多个实例指向同一个 RefcountedRep
+// 每个实例析构时只减去一个引用计数
 CrcCordState::~CrcCordState() {
   Unref(refcounted_rep_);
 }
@@ -101,6 +109,9 @@ void CrcCordState::Normalize() {
   }
 
   Rep* r = mutable_rep();
+  // prefix_crc 中存了多个包含前缀的 crc
+  // 这里逐个移除前缀的crc，保留去除前缀后的crc
+  // 最后将removed_prefix 初始化为空对象
   for (auto& prefix_crc : r->prefix_crc) {
     size_t remaining = prefix_crc.length - r->removed_prefix.length;
     prefix_crc.crc = absl::RemoveCrc32cPrefix(r->removed_prefix.crc,

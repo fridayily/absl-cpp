@@ -1001,6 +1001,9 @@ class Cord {
     // otherwise transition from tree to inline storage if we just remove the
     // CordRepCrc node before mutations. Must never be called inside a
     // CordzUpdateScope since it untracks the cordz info.
+
+    // 如果我们在进行变更操作之前就移除CordRepCrc节点，那么代码就能避免许多原本需要在
+    // 树形存储与内联存储之间转换的特殊情况。
     void MaybeRemoveEmptyCrcNode();
 
     cord_internal::InlineData data_;
@@ -1104,12 +1107,13 @@ void InitializeCordRepExternal(absl::string_view data,
 
 // Creates a new `CordRep` that owns `data` and `releaser` and returns a pointer
 // to it. Requires `data` to be non-empty.
+
 template <typename Releaser>
 // NOLINTNEXTLINE - suppress clang-tidy raw pointer return.
 absl::Nonnull<CordRep*> NewExternalRep(absl::string_view data,
                                        Releaser&& releaser) {
   assert(!data.empty());
-  using ReleaserType = absl::decay_t<Releaser>;
+  using ReleaserType = absl::decay_t<Releaser>; // 去除了顶层cv限定
   CordRepExternal* rep = new CordRepExternalImpl<ReleaserType>(
       std::forward<Releaser>(releaser), 0);
   InitializeCordRepExternal(data, rep);
@@ -1228,6 +1232,7 @@ Cord::InlineRep::MakeFlatWithExtraCapacity(size_t extra) {
   return result;
 }
 
+// 用于将树结构的节点（CordRep）直接放置（emplace）到内部表示中。
 inline void Cord::InlineRep::EmplaceTree(absl::Nonnull<CordRep*> rep,
                                          MethodIdentifier method) {
   assert(rep);

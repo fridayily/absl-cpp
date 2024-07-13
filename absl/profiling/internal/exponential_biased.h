@@ -39,6 +39,9 @@ namespace profiling_internal {
 // counting down how long before the event to happen. For example, if we'd want
 // to sample one in every 1000 'Frobber' calls, our code could look like this:
 //
+// 在Frobber类的构造函数中，通过调用exponential_biased_.GetStride(1000)
+// 初始化stride_变量。这一步骤根据给定的平均期望（每1000次调用），
+// 计算出一个随机的“步长”（stride），作为下一次执行SampleFrob的倒计时
 //   Frobber::Frobber() {
 //     stride_ = exponential_biased_.GetStride(1000);
 //   }
@@ -69,7 +72,8 @@ namespace profiling_internal {
 //    double rounded_value = std::rint(value);
 //    bias_ = value - rounded_value;
 //    return rounded_value;
-//
+// Thread-compatible（线程兼容）是指一个程序、库、函数或者代码片段能够在多线程环境中
+// 安全使用，而不会引起数据竞争、死锁或其他与并发相关的错误。
 // This class is thread-compatible.
 class ExponentialBiased {
  public:

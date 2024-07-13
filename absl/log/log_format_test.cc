@@ -172,6 +172,13 @@ using SignedIntTypes =
     Types<signed short, signed int, signed long, signed long long>;  // NOLINT
 TYPED_TEST_SUITE(SignedIntLogFormatTest, SignedIntTypes);
 
+TEST(LogTest,TestOne){
+  LOG(INFO) << "Hello world!";
+
+  int x = 3, y = 5;
+  CHECK_EQ(2 * x, y) << "oops!";
+}
+
 TYPED_TEST(SignedIntLogFormatTest, Positive) {
   absl::ScopedMockLog test_sink(absl::MockLogDefault::kDisallowUnexpected);
 

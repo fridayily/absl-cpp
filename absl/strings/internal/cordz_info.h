@@ -191,6 +191,7 @@ class ABSL_LOCKABLE CordzInfo : public CordzHandle {
   // Global cordz info list. CordzInfo stores a pointer to the global list
   // instance to harden against ODR violations.
   struct List {
+    // 构造函数
     constexpr explicit List(absl::ConstInitType)
         : mutex(absl::kConstInit,
                 absl::base_internal::SCHEDULE_COOPERATIVE_AND_KERNEL) {}
@@ -221,6 +222,21 @@ class ABSL_LOCKABLE CordzInfo : public CordzHandle {
   // Returns 0 if `src` is null.
   static size_t FillParentStack(const CordzInfo* src, void** stack);
 
+   // 用来检测程序中的One Definition Rule是否被违反，特别是在调试构建中。如果检测到
+  // list_成员没有正确指向预期的全局global_list_，则会通过ABSL_RAW_CHECK宏报告一个错误，
+  // 帮助开发者发现并修正潜在的链接时或运行时错误。
+
+  // One Definition Rule（ODR）是C++编程语言中的一个基本规则，它规定了在程序的
+  // 整个生命周期中，任何给定的模板、变量、函数或者类类型只能有一个定义。
+  // 简单来说，ODR确保了当你在多个翻译单元（translation units，通常是不同的.cpp文件）
+  // 中声明了同样的实体（如全局变量、函数等），这些实体必须具有完全相同的定义。
+  // 如果存在多个不同的定义，链接阶段可能会失败，或者即使链接成功，
+  // 程序的行为也可能是未定义的。
+
+  // NDEBUG是一个预处理器宏，通常在C/C++程序中用来控制调试信息和assertion检查的开关。
+  // 当NDEBUG被定义时，它指示编译器禁用assert语句以及可能影响性能的调试代码，
+  // 使得发布的（release）版本能够更小、更快。
+  // Release构建配置时，NDEBUG会被自动定义
   void ODRCheck() const {
 #ifndef NDEBUG
     ABSL_RAW_CHECK(list_ == &global_list_, "ODR violation in Cord");
@@ -283,6 +299,7 @@ inline void CordzInfo::AssertHeld() ABSL_ASSERT_EXCLUSIVE_LOCK(mutex_) {
   mutex_.AssertHeld();
 #endif
 }
+
 
 inline void CordzInfo::SetCordRep(CordRep* rep) {
   AssertHeld();

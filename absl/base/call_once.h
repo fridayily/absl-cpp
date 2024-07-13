@@ -91,6 +91,7 @@ class once_flag {
   once_flag& operator=(const once_flag&) = delete;
 
  private:
+  // 友元函数，它允许访问once_flag的control_成员
   friend absl::Nonnull<std::atomic<uint32_t>*> base_internal::ControlWord(
       absl::Nonnull<once_flag*> flag);
   std::atomic<uint32_t> control_;

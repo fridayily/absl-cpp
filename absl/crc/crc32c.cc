@@ -70,6 +70,7 @@ crc32c_t ConcatCrc32c(crc32c_t lhs_crc, crc32c_t rhs_crc, size_t rhs_len) {
   return crc32c_t{result ^ static_cast<uint32_t>(rhs_crc)};
 }
 
+
 crc32c_t RemoveCrc32cPrefix(crc32c_t crc_a, crc32c_t crc_ab, size_t length_b) {
   return ConcatCrc32c(crc_a, crc_ab, length_b);
 }

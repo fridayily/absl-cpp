@@ -147,8 +147,8 @@
 // User code should not inspect this macro.  To check in the preprocessor if
 // absl::string_view is a typedef of std::string_view, use the feature macro
 // ABSL_USES_STD_STRING_VIEW.
-
-#define ABSL_OPTION_USE_STD_STRING_VIEW 2
+// 修改 std_string_view 模式
+#define ABSL_OPTION_USE_STD_STRING_VIEW 0
 
 // ABSL_OPTION_USE_STD_VARIANT
 //

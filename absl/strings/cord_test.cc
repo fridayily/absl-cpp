@@ -32,8 +32,6 @@
 #include <utility>
 #include <vector>
 
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "absl/base/attributes.h"
 #include "absl/base/config.h"
 #include "absl/base/internal/endian.h"
@@ -45,6 +43,7 @@
 #include "absl/hash/hash.h"
 #include "absl/hash/hash_testing.h"
 #include "absl/log/check.h"
+#include "absl/log/initialize.h"
 #include "absl/log/log.h"
 #include "absl/random/random.h"
 #include "absl/strings/cord_buffer.h"
@@ -61,6 +60,8 @@
 #include "absl/strings/str_format.h"
 #include "absl/strings/string_view.h"
 #include "absl/types/optional.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 // convenience local constants
 static constexpr auto FLAT = absl::cord_internal::FLAT;
@@ -243,14 +244,18 @@ class CordTestPeer {
 ABSL_NAMESPACE_END
 }  // namespace absl
 
-
-
 // The CordTest fixture runs all tests with and without expected CRCs being set
 // on the subject Cords.
+// 继承自 testing::TestWithParam<bool>：这表明 CordTest 是一个参数化测试固件类，
+// 其参数类型为布尔值（bool），用于控制是否在测试中使用校验和（CRC）
 class CordTest : public testing::TestWithParam<bool /*useCrc*/> {
  public:
   // Returns true if test is running with Crc enabled.
+  // UseCrc() 方法：这是一个公共成员函数，返回当前测试是否启用了校验和。
+  // 它通过调用 GetParam() 来获取由 INSTANTIATE_TEST_SUITE_P 宏传入的参数值
   bool UseCrc() const { return GetParam(); }
+  // 此方法根据 UseCrc() 的结果决定是否对给定的 absl::Cord
+  // 对象设置预期的校验和。 如果启用校验和，则设置校验和值为 1。
   void MaybeHarden(absl::Cord& c) {
     if (UseCrc()) {
       c.SetExpectedChecksum(1);
@@ -271,6 +276,10 @@ class CordTest : public testing::TestWithParam<bool /*useCrc*/> {
   }
 };
 
+// 用于创建同一个测试套件的多个实例，每个实例使用不同的参数。
+// 这使您能够使用不同的输入运行相同的测试集。
+// 测试固件类  以在此定义变量以及所有测试共有的初始化/清理逻辑
+// testing::Bool()：这是参数生成器
 INSTANTIATE_TEST_SUITE_P(WithParam, CordTest, testing::Bool(),
                          CordTest::ToString);
 
@@ -281,6 +290,20 @@ TEST(CordRepFlat, AllFlatCapacities) {
   static_assert(absl::cord_internal::kMaxLargeFlatSize == 256 << 10, "");
   EXPECT_EQ(absl::cord_internal::TagToAllocatedSize(FLAT), 32);
   EXPECT_EQ(absl::cord_internal::TagToAllocatedSize(MAX_FLAT_TAG), 256 << 10);
+  //  absl::InitializeLogging();
+
+  LOG(INFO) << "Flat AllocatedSize 6+1: "
+            << absl::cord_internal::TagToAllocatedSize(FLAT + 1);
+  LOG(INFO) << "Flat AllocatedSize 6+2: "
+            << absl::cord_internal::TagToAllocatedSize(FLAT + 2);
+  LOG(INFO) << "Flat AllocatedSize 66: "
+            << absl::cord_internal::TagToAllocatedSize(66);
+  LOG(INFO) << "Flat AllocatedSize 66+1: "
+            << absl::cord_internal::TagToAllocatedSize(67);
+  LOG(INFO) << "Flat AllocatedSize 186: "
+            << absl::cord_internal::TagToAllocatedSize(186);
+  LOG(INFO) << "Flat AllocatedSize 186+1: "
+            << absl::cord_internal::TagToAllocatedSize(187);
 
   // Verify all tags to map perfectly back and forth, and
   // that sizes are monotonically increasing.
@@ -314,6 +337,21 @@ TEST(CordRepFlat, AllFlatCapacities) {
   }
 }
 
+TEST(CordRepFlag, FlagTest) {
+  enum Flags {
+    kNumFlags = 1,
+
+    kImmortalFlag = 0x1,
+    kRefIncrement = (1 << kNumFlags),
+  };
+  Flags a = kNumFlags;
+  Flags b = kImmortalFlag;
+  Flags c = kRefIncrement;
+  LOG(INFO) << "kNumFlags: " << a;
+  LOG(INFO) << "kImmortalFlag: " << b;
+  LOG(INFO) << "kRefIncrement: " << c;
+}
+
 TEST(CordRepFlat, MaxFlatSize) {
   CordRepFlat* flat = CordRepFlat::New(kMaxFlatLength);
   EXPECT_EQ(flat->Capacity(), kMaxFlatLength);
@@ -331,15 +369,30 @@ TEST(CordRepFlat, MaxLargeFlatSize) {
   CordRep::Unref(flat);
 }
 
+// kFlatOverhead 是保留的，占用13字节
 TEST(CordRepFlat, AllFlatSizes) {
   const size_t kMaxSize = 256 * 1024;
-  for (size_t size = 32; size <= kMaxSize; size *=2) {
+  for (size_t size = 32; size <= kMaxSize; size *= 2) {
     const size_t length = size - kFlatOverhead - 1;
     CordRepFlat* flat = CordRepFlat::New(CordRepFlat::Large(), length);
     EXPECT_GE(flat->Capacity(), length);
     memset(flat->Data(), 0xCD, flat->Capacity());
     CordRep::Unref(flat);
   }
+}
+
+TEST_P(CordTest, FixFlatSizes) {
+  using absl::strings_internal::CordTestAccess;
+
+  // Make a string of length s.
+  size_t s = 30;
+  std::string src;
+  while (src.size() < s) {
+    src.push_back('a' + (src.size() % 26));
+  }
+  absl::Cord dst(src);
+  MaybeHarden(dst);
+  EXPECT_EQ(std::string(dst), src) << s;
 }
 
 TEST_P(CordTest, AllFlatSizes) {
@@ -358,6 +411,7 @@ TEST_P(CordTest, AllFlatSizes) {
   }
 }
 
+
 // We create a Cord at least 128GB in size using the fact that Cords can
 // internally reference-count; thus the Cord is enormous without actually
 // consuming very much memory.
@@ -368,6 +422,7 @@ TEST_P(CordTest, GigabyteCordFromExternal) {
 
   size_t length = 128 * 1024;
   char* data = new char[length];
+  // 根据传入的 data 和 release 函数创建 Cord
   absl::Cord from = absl::MakeCordFromExternal(
       absl::string_view(data, length),
       [](absl::string_view sv) { delete[] sv.data(); });
@@ -377,6 +432,11 @@ TEST_P(CordTest, GigabyteCordFromExternal) {
   // Cord will need rebalancing and will exercise code that, in the past, has
   // caused crashes in production.  We grow exponentially so that the code will
   // execute in a reasonable amount of time.
+
+  // 该循环结合了指数级增长（exponential doubling）和逐步递增；
+  // （incremental size increases）两种调整策略
+  // ，通过指数级增长（例如每次迭代时大小翻倍），循环能够快速扩大数据结构的规模，
+  //      从而在测试或验证过程中确保整体运行时间保持在一个合理范围内
   absl::Cord c;
   c.Append(from);
   while (c.size() < max_size) {
@@ -589,7 +649,8 @@ TEST_P(CordTest, Find) {
 }
 
 TEST_P(CordTest, Subcord) {
-  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  //  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  RandomEngine rng(1234);
   const std::string s = RandomLowercaseString(&rng, 1024);
 
   absl::Cord a;
@@ -1153,7 +1214,8 @@ TEST_P(CordTest, Flatten) {
       absl::MakeFragmentedCord({"small ", "fragmented ", "cord"})));
 
   // Test with a cord that is longer than the largest flat buffer
-  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  //  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  RandomEngine rng(1234);
   VerifyFlatten(MaybeHardened(absl::Cord(RandomLowercaseString(&rng, 8192))));
 }
 
@@ -1553,7 +1615,8 @@ static void TestCompare(const absl::Cord& c, const absl::Cord& d,
 }
 
 TEST_P(CordTest, CompareComparisonIsUnsigned) {
-  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  //  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  RandomEngine rng(1234);
   std::uniform_int_distribution<uint32_t> uniform_uint8(0, 255);
   char x = static_cast<char>(uniform_uint8(rng));
   TestCompare(
@@ -1563,7 +1626,8 @@ TEST_P(CordTest, CompareComparisonIsUnsigned) {
 
 TEST_P(CordTest, CompareRandomComparisons) {
   const int kIters = 5000;
-  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  //  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  RandomEngine rng(1234);
 
   int n = GetUniformRandomUpTo(&rng, 5000);
   absl::Cord a[] = {MakeExternalCord(n),
@@ -1700,7 +1764,8 @@ TEST_P(CordTest, ConstructFromExternalReleaserInvoked) {
 }
 
 TEST_P(CordTest, ConstructFromExternalCompareContents) {
-  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  //  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  RandomEngine rng(1234);
 
   for (int length = 1; length <= 2048; length *= 2) {
     std::string data = RandomLowercaseString(&rng, length);
@@ -1717,7 +1782,8 @@ TEST_P(CordTest, ConstructFromExternalCompareContents) {
 }
 
 TEST_P(CordTest, ConstructFromExternalLargeReleaser) {
-  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  //  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  RandomEngine rng(1234);
   constexpr size_t kLength = 256;
   std::string data = RandomLowercaseString(&rng, kLength);
   std::array<char, kLength> data_array;
@@ -2094,15 +2160,12 @@ TEST_P(CordTest, CordMemoryUsageTotalMorePreciseMode) {
   // `fragmented` holds a Cord and a CordRepBtree. That tree points to two
   // copies of flat's internals, which we expect to dedup:
   EXPECT_EQ(fragmented.EstimatedMemoryUsage(kTotalMorePrecise),
-            sizeof(absl::Cord) +
-            sizeof(CordRepBtree) +
-            flat_internal_usage);
+            sizeof(absl::Cord) + sizeof(CordRepBtree) + flat_internal_usage);
 
   // This is a case where kTotal produces an overestimate:
-  EXPECT_EQ(fragmented.EstimatedMemoryUsage(),
-            sizeof(absl::Cord) +
-            sizeof(CordRepBtree) +
-            2 * flat_internal_usage);
+  EXPECT_EQ(
+      fragmented.EstimatedMemoryUsage(),
+      sizeof(absl::Cord) + sizeof(CordRepBtree) + 2 * flat_internal_usage);
 }
 
 TEST_P(CordTest, CordMemoryUsageTotalMorePreciseModeWithSubstring) {
@@ -2125,17 +2188,13 @@ TEST_P(CordTest, CordMemoryUsageTotalMorePreciseModeWithSubstring) {
   // `fragmented` holds a Cord and a CordRepBtree. That tree points to two
   // CordRepSubstrings, each pointing at flat's internals.
   EXPECT_EQ(fragmented.EstimatedMemoryUsage(kTotalMorePrecise),
-            sizeof(absl::Cord) +
-            sizeof(CordRepBtree) +
-            2 * sizeof(CordRepSubstring) +
-            flat_internal_usage);
+            sizeof(absl::Cord) + sizeof(CordRepBtree) +
+                2 * sizeof(CordRepSubstring) + flat_internal_usage);
 
   // This is a case where kTotal produces an overestimate:
   EXPECT_EQ(fragmented.EstimatedMemoryUsage(),
-            sizeof(absl::Cord) +
-            sizeof(CordRepBtree) +
-            2 * sizeof(CordRepSubstring) +
-            2 * flat_internal_usage);
+            sizeof(absl::Cord) + sizeof(CordRepBtree) +
+                2 * sizeof(CordRepSubstring) + 2 * flat_internal_usage);
 }
 }  // namespace
 
@@ -2161,7 +2220,8 @@ TEST_P(CordTest, DiabolicalGrowth) {
   // This test exercises a diabolical Append(<one char>) on a cord, making the
   // cord shared before each Append call resulting in a terribly fragmented
   // resulting cord.
-  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  //  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  RandomEngine rng(1234);
   const std::string expected = RandomLowercaseString(&rng, 5000);
   absl::Cord cord;
   for (char c : expected) {
@@ -2393,16 +2453,17 @@ TEST_P(CordTest, CordChunkIteratorOperations) {
     VerifyChunkIterator(reused_nodes_cord, expected_chunks);
   }
 
-  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  //  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  RandomEngine rng(1234);
   absl::Cord flat_cord(RandomLowercaseString(&rng, 256));
   absl::Cord subcords;
   for (int i = 0; i < 128; ++i) subcords.Prepend(flat_cord.Subcord(i, 128));
   VerifyChunkIterator(subcords, 128);
 }
 
-
 TEST_P(CordTest, AdvanceAndReadOnDataEdge) {
-  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  //  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  RandomEngine rng(1234);
   const std::string data = RandomLowercaseString(&rng, 2000);
   for (bool as_flat : {true, false}) {
     SCOPED_TRACE(as_flat ? "Flat" : "External");
@@ -2436,7 +2497,8 @@ TEST_P(CordTest, AdvanceAndReadOnDataEdge) {
 }
 
 TEST_P(CordTest, AdvanceAndReadOnSubstringDataEdge) {
-  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  //  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  RandomEngine rng(1234);
   const std::string data = RandomLowercaseString(&rng, 2500);
   for (bool as_flat : {true, false}) {
     SCOPED_TRACE(as_flat ? "Flat" : "External");
@@ -2606,7 +2668,8 @@ TEST_P(CordTest, CharIteratorOperations) {
     VerifyCharIterator(reused_nodes_cord);
   }
 
-  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  //  RandomEngine rng(GTEST_FLAG_GET(random_seed));
+  RandomEngine rng(1234);
   absl::Cord flat_cord(RandomLowercaseString(&rng, 256));
   absl::Cord subcords;
   for (int i = 0; i < 4; ++i) {
@@ -2787,9 +2850,8 @@ class AfterExitCordTester {
     return true;
   }
 
-  ~AfterExitCordTester() {
-    EXPECT_EQ(*cord_, expected_);
-  }
+  ~AfterExitCordTester() { EXPECT_EQ(*cord_, expected_); }
+
  private:
   absl::Cord* cord_;
   absl::string_view expected_;
@@ -2853,7 +2915,6 @@ struct LongView {
                              SimpleStrlen("String that does not fit SSO."));
   }
 };
-
 
 TEST_P(CordTest, AfterExit) {
   TestAfterExit(absl::strings_internal::MakeStringConstant(ShortView{}));

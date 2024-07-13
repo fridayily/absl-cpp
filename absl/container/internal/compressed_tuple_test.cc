@@ -56,6 +56,29 @@ namespace {
 using absl::test_internal::CopyableMovableInstance;
 using absl::test_internal::InstanceTracker;
 
+
+template <typename Releaser>
+struct TestCompressTuple:
+      public ::absl::container_internal::CompressedTuple<Releaser> {
+
+  template <typename T>
+  TestCompressTuple(T&& releaser)
+      // 初始化一个类
+      : TestCompressTuple::CompressedTuple(std::forward<T>(releaser)) {
+    this->id = &releaser;
+  }
+  Releaser* id;
+}
+;
+
+TEST(SelfCompressedTupleTest,One){
+    TestCompressTuple<int> test1(1);
+    std::string s = "abcd";
+    TestCompressTuple<std::string> test2(s);
+
+}
+
+
 TEST(CompressedTupleTest, Sizeof) {
   EXPECT_EQ(sizeof(int), sizeof(CompressedTuple<int>));
   EXPECT_EQ(sizeof(int), sizeof(CompressedTuple<int, Empty<0>>));

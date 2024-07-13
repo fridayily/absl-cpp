@@ -56,16 +56,21 @@ class IsOkAndHoldsMatcherImpl
       : inner_matcher_(::testing::SafeMatcherCast<const value_type&>(
             std::forward<InnerMatcher>(inner_matcher))) {}
 
+  // 此方法用于将匹配器的期望条件以字符串形式输出到一个输出流（如std::cout），
+  // 使得测试失败时的输出更加易于理解。
   void DescribeTo(std::ostream* os) const override {
     *os << "is OK and has a value that ";
     inner_matcher_.DescribeTo(os);
   }
 
+  // 这个方法描述了匹配器的否定形式，即不满足匹配条件时的描述。
   void DescribeNegationTo(std::ostream* os) const override {
     *os << "isn't OK or has a value that ";
     inner_matcher_.DescribeNegationTo(os);
   }
 
+  // 这个方法是匹配器的核心，用于检查给定的实际值（actual value）是否满足匹配条件。
+  // 如果匹配成功，应当返回true；否则返回false
   bool MatchAndExplain(
       StatusOrType actual_value,
       ::testing::MatchResultListener* result_listener) const override {
@@ -231,8 +236,10 @@ class MonoIsOkMatcherImpl : public ::testing::MatcherInterface<T> {
 };
 
 // Implements IsOk() as a polymorphic matcher.
+// 自定义类型转换: operator 返回类型(){ 函数体 }
 class IsOkMatcher {
  public:
+  // 使IsOkMatcher实例可以自动转换为针对特定类型的Matcher<T>对象
   template <typename T>
   /*implicit*/ operator ::testing::Matcher<T>() const {  // NOLINT
     return ::testing::Matcher<T>(new MonoIsOkMatcherImpl<const T&>());

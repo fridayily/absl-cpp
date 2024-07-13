@@ -77,6 +77,8 @@ class StatusRep {
 
   // Ref and unref are const to allow access through a const pointer, and are
   // used during copying operations.
+  // std::memory_order_relaxed是最宽松的内存顺序，只保证了操作本身的原子性，
+  // 但不保证与其他线程的内存操作的同步。
   void Ref() const { ref_.fetch_add(1, std::memory_order_relaxed); }
   void Unref() const;
 

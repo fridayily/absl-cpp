@@ -30,6 +30,7 @@ namespace {
 
 // This is significantly faster for case-sensitive matches with very
 // few possible matches.
+// haystack 草堆 needle 针
 absl::Nullable<const char*> memmatch(absl::Nullable<const char*> phaystack,
                                      size_t haylen,
                                      absl::Nullable<const char*> pneedle,
@@ -40,10 +41,14 @@ absl::Nullable<const char*> memmatch(absl::Nullable<const char*> phaystack,
   if (haylen < neelen) return nullptr;
 
   const char* match;
+  // 确保循环在比较最后一个可能的子字符串时不会访问haystack之外的内存。
   const char* hayend = phaystack + haylen - neelen + 1;
   // A static cast is used here as memchr returns a const void *, and pointer
   // arithmetic is not allowed on pointers to void.
   while (
+      // 使用 memchr 找到当前haystack搜索范围内第一个字符pneedle[0]的出现位置
+      // memchr 用于在一块内存区域中查找指定的字符第一次出现的位置
+      // hayend - phaystack 能查找的长度
       (match = static_cast<const char*>(memchr(
            phaystack, pneedle[0], static_cast<size_t>(hayend - phaystack))))) {
     if (memcmp(match, pneedle, neelen) == 0)
@@ -56,8 +61,10 @@ absl::Nullable<const char*> memmatch(absl::Nullable<const char*> phaystack,
 
 void WritePadding(std::ostream& o, size_t pad) {
   char fill_buf[32];
+  // 使用 o.fill() 返回的字符值来填充 fill_buf 这个缓冲区的每个字节
   memset(fill_buf, o.fill(), sizeof(fill_buf));
   while (pad) {
+    // 一次性填充 n 个字符
     size_t n = std::min(pad, sizeof(fill_buf));
     o.write(fill_buf, static_cast<std::streamsize>(n));
     pad -= n;
@@ -79,27 +86,39 @@ class LookupTable {
 
  private:
   static unsigned char Index(char c) { return static_cast<unsigned char>(c); }
+  // 布尔型数组，所有元素默认初始化为false
   bool table_[UCHAR_MAX + 1] = {};
 };
 
 }  // namespace
 
+// 用于将string_view类型的piece输出到std::ostream对象o
 std::ostream& operator<<(std::ostream& o, string_view piece) {
+  // 用于检查o是否准备好进行输出操作。如果sentry构造成功，说明可以安全地进行输出
   std::ostream::sentry sentry(o);
   if (sentry) {
     size_t lpad = 0;
     size_t rpad = 0;
     if (static_cast<size_t>(o.width()) > piece.size()) {
+      // 填充量
       size_t pad = static_cast<size_t>(o.width()) - piece.size();
+      // 如果o的对齐方式是右对齐（std::ios_base::right），
+      // o.flags() & o.adjustfield的结果将是一个非零值，
+      // 因为o.adjustfield对应的位被设置。如果o的对齐方式是左对齐，
+      // 那么结果也将是一个非零值，因为std::ios_base::left的位被设置
       if ((o.flags() & o.adjustfield) == o.left) {
         rpad = pad;
       } else {
         lpad = pad;
       }
     }
+    // lpad 先填充，再写 piece
     if (lpad) WritePadding(o, lpad);
     o.write(piece.data(), static_cast<std::streamsize>(piece.size()));
+    // rpad 为真，说明上面没有填充
     if (rpad) WritePadding(o, rpad);
+    // 将字段宽度设置为0意味着取消之前设置的宽度限制。
+    // 这通常用于重置输出流的宽度，以便后续的输出不受先前设置的宽度影响。
     o.width(0);
   }
   return o;

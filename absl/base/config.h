@@ -202,6 +202,10 @@ static_assert(ABSL_INTERNAL_INLINE_NAMESPACE_STR[0] != 'h' ||
 //
 // Note: Use this macro to avoid an extra level of #ifdef __has_builtin check.
 // http://releases.llvm.org/3.3/tools/clang/docs/LanguageExtensions.html
+// __has_builtin: 是Clang编译器提供的一个特性检查宏，
+// 用于检测编译器是否支持某个特定的内置函数。如果支持，则__has_builtin(x)会评估为1；
+// 如果不支持，则为0。
+
 #ifdef __has_builtin
 #define ABSL_HAVE_BUILTIN(x) __has_builtin(x)
 #else

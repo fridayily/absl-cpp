@@ -663,6 +663,19 @@ class ABSL_ATTRIBUTE_TRIVIAL_ABI Status final {
   //  - When the low bit is off it is an external representation.
   //    In this case all the data comes from a heap allocated Rep object.
   //    rep_ is a status_internal::StatusRep* pointer to that structure.
+
+  // 内联表示（Inlined Representation）：
+  //   当rep_的最低位（最右边的位）为1时，表示使用内联表示。
+  //   这种情况下，错误信息使用“标准错误空间”（canonical error space），不包含消息或负载（payload）。
+  //   错误代码可以通过将rep_右移两位得到，即rep_ >> 2。
+  //   rep_的最低第二位（rep_ & 2）用于标记对象是否已被移动（moved from），
+  //   这是在IsMovedFrom()函数中检查的。
+  //
+  // 外部表示（External Representation）：
+  //   当rep_的最低位为0时，表示使用外部表示。在这种情况下，
+  //   所有的数据（包括错误代码、消息和可能的负载）都存储在一个动态分配的
+  //   status_internal::StatusRep结构体中。
+  //   rep_此时是一个指向status_internal::StatusRep结构体的指针。
   uintptr_t rep_;
 
   friend class status_internal::StatusRep;
@@ -778,8 +791,11 @@ inline Status::Status(const Status& x) : Status(x.rep_) { Ref(rep_); }
 inline Status& Status::operator=(const Status& x) {
   uintptr_t old_rep = rep_;
   if (x.rep_ != old_rep) {
+    // 增加 x 的引用计数
     Ref(x.rep_);
+    // 复制数据
     rep_ = x.rep_;
+    // 减去旧对象引用
     Unref(old_rep);
   }
   return *this;
@@ -799,6 +815,7 @@ inline Status& Status::operator=(Status&& x) noexcept {
   return *this;
 }
 
+// s 是 ok 才更新状态
 inline void Status::Update(const Status& new_status) {
   if (ok()) {
     *this = new_status;
@@ -863,6 +880,7 @@ inline absl::optional<absl::Cord> Status::GetPayload(
   return RepToPointer(rep_)->GetPayload(type_url);
 }
 
+// 状态是 ok 不用设置 SetPayload
 inline void Status::SetPayload(absl::string_view type_url, absl::Cord payload) {
   if (ok()) return;
   status_internal::StatusRep* rep = PrepareToModify(rep_);
@@ -885,19 +903,28 @@ inline void Status::ForEachPayload(
   RepToPointer(rep_)->ForEachPayload(visitor);
 }
 
+// IsInlined函数的目的是根据Status对象的内部表示（rep）快速判断状态是否是内联的。
+// 这种设计可能是为了优化存储和查询效率，例如，可能有一个内联和非内联的状态表示，
+// 其中内联状态可能占用更少的空间或具有不同的处理方式。
+// 由于是constexpr，这个函数可以在编译时被计算，适合用于常量表达式和模板元编程。
+// 通过判断最低位是否是 1 来判断 rep 是否内联
 constexpr bool Status::IsInlined(uintptr_t rep) { return (rep & 1) != 0; }
 
+// rep 第 2 位位 1 表示状态是移动的
 constexpr bool Status::IsMovedFrom(uintptr_t rep) { return (rep & 2) != 0; }
 
+// 标准码转为内联码  如 2 -> 100 + 1 = 101
 constexpr uintptr_t Status::CodeToInlinedRep(absl::StatusCode code) {
   return (static_cast<uintptr_t>(code) << 2) + 1;
 }
 
+// 内联码转为标准码
 constexpr absl::StatusCode Status::InlinedRepToCode(uintptr_t rep) {
   ABSL_ASSERT(IsInlined(rep));
   return static_cast<absl::StatusCode>(rep >> 2);
 }
 
+// 外部表示转为内联表示
 constexpr uintptr_t Status::MovedFromRep() {
   return CodeToInlinedRep(absl::StatusCode::kInternal) | 2;
 }
@@ -908,6 +935,8 @@ inline absl::Nonnull<const status_internal::StatusRep*> Status::RepToPointer(
   return reinterpret_cast<const status_internal::StatusRep*>(rep);
 }
 
+// 这个函数的作用是将一个非空的status_internal::StatusRep指针转换为一个无符号整数，
+// 可能用于某些底层处理或跨语言交互场景，同时利用absl::Nonnull确保了传入指针的安全性。
 inline uintptr_t Status::PointerToRep(
     absl::Nonnull<status_internal::StatusRep*> rep) {
   return reinterpret_cast<uintptr_t>(rep);

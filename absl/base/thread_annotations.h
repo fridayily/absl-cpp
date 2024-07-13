@@ -38,7 +38,16 @@
 #include "absl/base/config.h"
 
 // ABSL_GUARDED_BY()
-//
+
+// 标注那些必须在持有特定锁的情况下才能访问的共享资源。
+// 这有助于静态分析工具识别潜在的线程安全问题，
+// 比如未加锁的访问或错误的锁保护。
+// 当你在一个变量声明后加上 ABSL_GUARDED_BY(mutex_name)，
+// 你是在声明这个变量的读写操作应当在持有 mutex_name 这个互斥锁时进行。
+// 通过 #if ABSL_HAVE_ATTRIBUTE(guarded_by) 检查编译器是否支持
+// __attribute__((guarded_by(x))) 这样的属性。
+// 如果支持，则宏会扩展为该属性应用；如果不支持，宏则不执行任何操作，仅作为标记存在
+
 // Documents if a shared field or global variable needs to be protected by a
 // mutex. ABSL_GUARDED_BY() allows the user to specify a particular mutex that
 // should be held when accessing the annotated variable.

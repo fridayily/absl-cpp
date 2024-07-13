@@ -83,6 +83,8 @@ static bool VerifyNode(absl::Nonnull<CordRep*> root,
 static inline absl::Nullable<CordRep*> VerifyTree(
     absl::Nullable<CordRep*> node) {
   assert(node == nullptr || VerifyNode(node, node));
+  // 此处可能是为了确保编译期间VerifyNode被引用，防止由于静态内联函数声明后
+  // 未直接使用而导致的链接错误。实际上，这行代码对程序功能没有直接影响。
   static_cast<void>(&VerifyNode);
   return node;
 }
@@ -90,7 +92,7 @@ static inline absl::Nullable<CordRep*> VerifyTree(
 static absl::Nonnull<CordRepFlat*> CreateFlat(absl::Nonnull<const char*> data,
                                               size_t length,
                                               size_t alloc_hint) {
-  CordRepFlat* flat = CordRepFlat::New(length + alloc_hint);
+  CordRepFlat* flat = CordRepFlat::New(length + alloc_hint); // 初始的引用计数器值为2
   flat->length = length;
   memcpy(flat->Data(), data, length);
   return flat;
@@ -333,7 +335,7 @@ void Cord::InlineRep::UnrefTree() {
 
 // --------------------------------------------------------------------
 // Constructors and destructors
-
+// 初始化 contents_
 Cord::Cord(absl::string_view src, MethodIdentifier method)
     : contents_(InlineData::kDefaultInit) {
   const size_t n = src.size();
@@ -1046,13 +1048,13 @@ bool Cord::EndsWith(const Cord& rhs) const {
 
 // --------------------------------------------------------------------
 // Misc.
-
+ // 重写 string
 Cord::operator std::string() const {
   std::string s;
   absl::CopyCordToString(*this, &s);
   return s;
 }
-
+// sizeof(InlineData) = 16
 void CopyCordToString(const Cord& src, absl::Nonnull<std::string*> dst) {
   if (!src.contents_.is_tree()) {
     src.contents_.CopyTo(dst);

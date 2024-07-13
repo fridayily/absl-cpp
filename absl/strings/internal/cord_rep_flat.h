@@ -39,11 +39,22 @@ namespace cord_internal {
 // ideally a 'nice' size aligning with allocation and cacheline sizes like 32.
 // kMaxFlatSize is bounded by the size resulting in a computed tag no greater
 // than MAX_FLAT_TAG. MAX_FLAT_TAG provides for additional 'high' tag values.
+
+// CordRep.storage 之前定义了一些成员变量，之后用来存储数据
+// 即在一个类中，成员变量和数据是紧密的存在一起
+
+// storage[3] 在不同的派生类中作用不同
 static constexpr size_t kFlatOverhead = offsetof(CordRep, storage);
+// 允许分配的最小 flat node 大小，设置为32字节
 static constexpr size_t kMinFlatSize = 32;
+// 允许分配的最大 flat node 大小，设置为4K字节
 static constexpr size_t kMaxFlatSize = 4096;
+
+// 分别代表了在扣除 kFlatOverhead 后，实际可用于数据存储的最大和最小 flat node 长度。
+// 这是考虑了结构体开销后的有效数据容量。
 static constexpr size_t kMaxFlatLength = kMaxFlatSize - kFlatOverhead;
 static constexpr size_t kMinFlatLength = kMinFlatSize - kFlatOverhead;
+
 static constexpr size_t kMaxLargeFlatSize = 256 * 1024;
 static constexpr size_t kMaxLargeFlatLength = kMaxLargeFlatSize - kFlatOverhead;
 
@@ -75,9 +86,8 @@ static_assert(AllocatedSizeToTagUnchecked(kMaxLargeFlatSize) == MAX_FLAT_TAG,
 
 // RoundUp logically performs `((n + m - 1) / m) * m` to round up to the nearest
 // multiple of `m`, optimized for the invariant that `m` is a power of 2.
-constexpr size_t RoundUp(size_t n, size_t m) {
-  return (n + m - 1) & (0 - m);
-}
+// n向上取整至最接近m的倍数的结果
+constexpr size_t RoundUp(size_t n, size_t m) { return (n + m - 1) & (0 - m); }
 
 // Returns the size to the nearest equal or larger value that can be
 // expressed exactly as a tag value.
@@ -104,6 +114,8 @@ constexpr size_t TagToLength(uint8_t tag) {
 static_assert(TagToAllocatedSize(MAX_FLAT_TAG) == kMaxLargeFlatSize,
               "Bad tag logic");
 
+// CordRepFlat 继承 CordRep
+// CordRepFlat本身没有任何成员函数，只有自定义的函数来操作 CordRep 的成员
 struct CordRepFlat : public CordRep {
   // Tag for explicit 'large flat' allocation
   struct Large {};
@@ -111,6 +123,7 @@ struct CordRepFlat : public CordRep {
   // Creates a new flat node.
   template <size_t max_flat_size, typename... Args>
   static CordRepFlat* NewImpl(size_t len, Args... args ABSL_ATTRIBUTE_UNUSED) {
+    // 根据传入的模板参数限制len 的最大值
     if (len <= kMinFlatLength) {
       len = kMinFlatLength;
     } else if (len > max_flat_size - kFlatOverhead) {
@@ -118,21 +131,35 @@ struct CordRepFlat : public CordRep {
     }
 
     // Round size up so it matches a size we can exactly express in a tag.
+    // 将长度len加上固定开销kFlatOverhead后向上取整，确保结果大小能够精确地用
+    // 一个“标签”表示。这通常涉及到某种形式的内存管理或对齐优化。
     const size_t size = RoundUpForTag(len + kFlatOverhead);
+    // 使用全局的::operator
+    // new动态分配计算出的大小的内存，这包括了数据本身和可能的头部开销
     void* const raw_rep = ::operator new(size);
-    // GCC 13 has a false-positive -Wstringop-overflow warning here.
-    #if ABSL_INTERNAL_HAVE_MIN_GNUC_VERSION(13, 0)
-    #pragma GCC diagnostic push
-    #pragma GCC diagnostic ignored "-Wstringop-overflow"
-    #endif
+// GCC 13 has a false-positive -Wstringop-overflow warning here.
+#if ABSL_INTERNAL_HAVE_MIN_GNUC_VERSION(13, 0)
+#pragma GCC diagnostic push
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+#endif
+    // 在刚分配的内存上直接放置一个新的CordRepFlat对象（使用placement new语法）
+    // new 是一个运算符， A* a = new A 的过程
+    //   1.调用operator new (重载或者全局的)
+    //   2.调用构造函数生成类对象
+    //   3.返回相应指针
+    //  operator new 是一个函数，
+    //      ::operator new 指调用全局的 operator new
+    //  A a; 静态建立，栈中分配内存
+    //  A* a = new A 动态建立 堆中分配内存  rep 和 raw_rep 指向一个地址
     CordRepFlat* rep = new (raw_rep) CordRepFlat();
+    // 通过分配的 size 计算 tag
     rep->tag = AllocatedSizeToTag(size);
-    #if ABSL_INTERNAL_HAVE_MIN_GNUC_VERSION(13, 0)
-    #pragma GCC diagnostic pop
-    #endif
+#if ABSL_INTERNAL_HAVE_MIN_GNUC_VERSION(13, 0)
+#pragma GCC diagnostic pop
+#endif
     return rep;
   }
-
+  // 在堆上分配 size 的大小的内存，并返回一个指向该内存的指针，没有赋值
   static CordRepFlat* New(size_t len) { return NewImpl<kMaxFlatSize>(len); }
 
   static CordRepFlat* New(Large, size_t len) {
@@ -142,7 +169,7 @@ struct CordRepFlat : public CordRep {
   // Deletes a CordRepFlat instance created previously through a call to New().
   // Flat CordReps are allocated and constructed with raw ::operator new and
   // placement new, and must be destructed and deallocated accordingly.
-  static void Delete(CordRep*rep) {
+  static void Delete(CordRep* rep) {
     assert(rep->tag >= FLAT && rep->tag <= MAX_FLAT_TAG);
 
 #if defined(__cpp_sized_deallocation)
@@ -150,8 +177,9 @@ struct CordRepFlat : public CordRep {
     rep->~CordRep();
     ::operator delete(rep, size);
 #else
-    rep->~CordRep();
+    rep->~CordRep(); // 父析构函数不是虚函数，子类析构时父类析构函数不会主动调用
     ::operator delete(rep);
+    // rep 是::operator new(size) 返回的指针
 #endif
   }
 
@@ -167,6 +195,7 @@ struct CordRepFlat : public CordRep {
   }
 
   // Returns a pointer to the data inside this flat rep.
+  // 返回存储数据的指针
   char* Data() { return reinterpret_cast<char*>(storage); }
   const char* Data() const { return reinterpret_cast<const char*>(storage); }
 

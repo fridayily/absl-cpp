@@ -49,6 +49,13 @@ void StatusRep::Unref() const {
   // Fast path: if ref==1, there is no need for a RefCountDec (since
   // this is the only reference and therefore no other thread is
   // allowed to be mucking with r).
+  // fetch_sub是一个原子操作，它从ref_当前的值中减去1，并返回减法操作前ref_的原始值。
+
+  // std::memory_order_acq_rel是一个内存序标记，它确保了：
+  // Acquire: 在这个操作之后执行的读取操作不会被重新排序到这个操作之前。
+  //        这对于确保后续读取能够看到在这个操作之前由其他线程写入的数据是非常重要的。
+  // Release: 在这个操作之前执行的写入操作不会被重新排序到这个操作之后。
+  //        这对于确保其他线程看到的是这个操作之前的状态，而不是之后的状态，是必要的。
   if (ref_.load(std::memory_order_acquire) == 1 ||
       ref_.fetch_sub(1, std::memory_order_acq_rel) - 1 == 0) {
     delete this;
@@ -109,6 +116,7 @@ void StatusRep::ForEachPayload(
     absl::FunctionRef<void(absl::string_view, const absl::Cord&)> visitor)
     const {
   if (auto* payloads = payloads_.get()) {
+    // 检查这个余数是否大于6。如果余数落在[7, 12]范围内，表达式的值为真，否则为假
     bool in_reverse =
         payloads->size() > 1 && reinterpret_cast<uintptr_t>(payloads) % 13 > 6;
 

@@ -42,14 +42,23 @@ class CrcCordState {
  public:
   // Constructors.
   CrcCordState();
+  // 拷贝构造函
+  // CrcCordState a
+  // CrcCordState b = a 是调用拷贝构造函数而不是拷贝赋值函数
   CrcCordState(const CrcCordState&);
+  // 移动构造函数
   CrcCordState(CrcCordState&&);
 
   // Destructor. Atomically unreferences the data.
   ~CrcCordState();
 
   // Copy and move operators.
+  // 拷贝赋值函数
+  // CrcCordState a
+  // CrcCordState b
+  // a = b 则是调用拷贝赋值函数
   CrcCordState& operator=(const CrcCordState&);
+  // 移动赋值函数
   CrcCordState& operator=(CrcCordState&&);
 
   // A (length, crc) pair.
@@ -89,14 +98,22 @@ class CrcCordState {
   // Returns a reference to the representation of the chunked CRC32C data.
   const Rep& rep() const { return refcounted_rep_->rep; }
 
+  // 每个 CrcCordState 实例都有自己的 refcounted_rep_ ，指向同一个 Rep
   // Returns a mutable reference to the representation of the chunked CRC32C
   // data. Calling this function will copy the data if another instance also
   // holds a reference to the data, so it is important to call rep() instead if
   // the data may not be mutated.
+  // 构建 n 实例时，这些实例共享一个 refcounted_rep_，引用计数器为 n
+  // 1. 当某一个实例调用 mutable_rep 时，发现引用计数器值大于1
+  // 2. 此时为该实例创建一个新的 RefcountedRep，将 refcounted_rep_ 指向新的 RefcountedRep
+  // 3. 共享的引用计数减1
+  // 4. 本实例的refcounted_rep_ 指向新的 RefcountedRep
+  //  即某一个实例调用 mutable_rep 后，会独享一个 Rep，对期修改不会影响其他实例的 Rep
+
   Rep* mutable_rep() {
     if (refcounted_rep_->count.load(std::memory_order_acquire) != 1) {
       RefcountedRep* copy = new RefcountedRep;
-      copy->rep = refcounted_rep_->rep;
+      copy->rep = refcounted_rep_->rep; // 这里时值的拷贝
       Unref(refcounted_rep_);
       refcounted_rep_ = copy;
     }
@@ -124,10 +141,14 @@ class CrcCordState {
   void Poison();
 
  private:
+  // absl::NoDestructor<CrcCordState::RefcountedRep> empty; 创建实例时
+  // 默认引用计数为 1
   struct RefcountedRep {
     std::atomic<int32_t> count{1};
     Rep rep;
   };
+
+  // 其目的在于避免那些很可能永远不会被实际利用到的内存分配操作
 
   // Adds a reference to the shared global empty `RefcountedRep`, and returns a
   // pointer to the `RefcountedRep`. This is an optimization to avoid unneeded

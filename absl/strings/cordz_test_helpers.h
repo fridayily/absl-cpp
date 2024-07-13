@@ -106,7 +106,9 @@ class CordzSamplingIntervalHelper {
  public:
   explicit CordzSamplingIntervalHelper(int32_t interval)
       : orig_mean_interval_(absl::cord_internal::get_cordz_mean_interval()) {
+    // 设置一个全局变量
     absl::cord_internal::set_cordz_mean_interval(interval);
+    // 设置一个线程变量
     absl::cord_internal::cordz_set_next_sample_for_testing(interval);
   }
 
@@ -135,6 +137,12 @@ struct TestCordRep {
 // an InlineData `data` initialized with that CordRep.
 struct TestCordData {
   TestCordRep rep;
+  // 用 rep.rep 初始化 InlineData
+  // InlineData 其中之一的 Rep 类型成员变量 ,定义为 union{data,as_tree}
+  // 进行构造时,将 cord_internal::CordRepFlat* 作为构造函数参数
+  // 构造时会构造 AsTree
+  // AsTree 有两个参数，cordz_info 初始化为1
+  //                  rep 初始化为 rep.rep
   cord_internal::InlineData data{rep.rep};
 };
 

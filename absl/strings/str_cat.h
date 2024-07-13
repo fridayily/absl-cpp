@@ -561,6 +561,11 @@ ABSL_MUST_USE_RESULT inline std::string StrCat(
 // Appends a string or set of strings to an existing string, in a similar
 // fashion to `StrCat()`.
 //
+// StrAppend函数要求其可变参数列表中的元素（a, b, c, ...）
+// 无一指向或引用目标字符串str的一部分。这意味着每个参数都应该是独立于str的实体
+
+// 函数不尝试检查输入参数是否为字符串str的部分，是因为这样做会引入运行时检查的开销，
+// 特别是在频繁调用StrAppend或参数众多的情况下，可能会显著降低函数的执行效率
 // WARNING: `StrAppend(&str, a, b, c, ...)` requires that none of the
 // a, b, c, parameters be a reference into str. For speed, `StrAppend()` does
 // not try to check each of its input arguments to be sure that they are not

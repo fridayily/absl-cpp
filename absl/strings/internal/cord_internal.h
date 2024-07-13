@@ -68,9 +68,17 @@ inline void enable_shallow_subcords(bool enable) {
   shallow_subcords_enabled.store(enable, std::memory_order_relaxed);
 }
 
+// absl::InlinedVector是一个来自Abseil库的容器，它试图结合数组（
+// 在小数据集时使用内联存储）和动态数组（大数据集时自动转换到堆上分配）的优点
+
+// 在当前文件及cord.h头文件中使用的absl::InlinedVector实例，
+// 它们各自的内联大小（inlined
+// size）并不强制要求一致。尽管目前可能出于历史原因采用了
+// 相同大小，但实际上每个InlinedVector根据其特定的使用场景和性能需求，
+// 可以选择一个独立优化的内联大小值。
 enum Constants {
   // The inlined size to use with absl::InlinedVector.
-  //
+
   // Note: The InlinedVectors in this file (and in cord.h) do not need to use
   // the same value for their inlined size. The fact that they do is historical.
   // It may be desirable for each to use a different inlined size optimized for
@@ -80,6 +88,9 @@ enum Constants {
   // the inlined vector size (47 exists for backward compatibility).
   kInlinedVectorSize = 47,
 
+  // 此常量定义了数据复制的偏好阈值。当需要处理的数据块大小不超过这个值时
+  // （即小于或等于511字节），倾向于直接复制数据；超过这个阈值时，
+  // 则更倾向于使用引用计数或其他高效内存管理策略来避免直接复制带来的开销。
   // Prefer copying blocks of at most this size, otherwise reference count.
   kMaxBytesToCopy = 511
 };
@@ -139,12 +150,16 @@ inline void SmallMemmove(char* dst, const char* src, size_t n) {
 // instances.  Data is stored in an atomic int32_t for compactness and speed.
 class RefcountAndFlags {
  public:
-  constexpr RefcountAndFlags() : count_{kRefIncrement} {}
-  struct Immortal {};
+  constexpr RefcountAndFlags() : count_{kRefIncrement} {}  // count_ 初始化为2
+  struct Immortal {};  // 不朽的;长生的;流芳百世的;名垂千古的;永世的
+  // 有参构造函数，指定引用计数不可修改
   explicit constexpr RefcountAndFlags(Immortal) : count_(kImmortalFlag) {}
 
   // Increments the reference count. Imposes no memory ordering.
+  // Increment 函数通过原子操作增加对象的引用计数，保证了多线程环境下的安全，
+  // 但不强制任何特定的内存顺序
   inline void Increment() {
+    // 每次加 2，保障不修改最低位
     count_.fetch_add(kRefIncrement, std::memory_order_relaxed);
   }
 
@@ -155,10 +170,23 @@ class RefcountAndFlags {
   // Inserts barriers to ensure that state written before this method returns
   // false will be visible to a thread that just observed this method returning
   // false.  Always returns false when the immortal bit is set.
+  // immortal 位设置时永远返回false ?? 为什么 代码看是返回 true
+
+  // 从代码看 kImmortalFlag 对象引用计数值为 1,3,5
+  // 非kImmortalFlag 对象引用计数值为 2,4,6
+  // count_ 刚初始化，值为2，返回 false
   inline bool Decrement() {
     int32_t refcount = count_.load(std::memory_order_acquire);
+    // refcount & kImmortalFlag 说明是不可改变对象
     assert(refcount > 0 || refcount & kImmortalFlag);
+    // 如果是 kImmortalFlag 类型，refcount= 1,3,5
     return refcount != kRefIncrement &&
+           // fetch_sub 返回减法操作前 count 的值
+           // 这里判断减法操作之前 count_!=kRefIncrement
+           //  如果类型是 kImmortalFlag 类型  --> 1!=kRefIncrement 则返回 true
+           // 如果是刚初始化的 kRefIncrement 类型，2!=kRefIncrement 则返回 false
+           // 如果是进行了 Increment 操作的 kRefIncrement 类型，则返回
+           // true，说明减成功
            count_.fetch_sub(kRefIncrement, std::memory_order_acq_rel) !=
                kRefIncrement;
   }
@@ -172,7 +200,15 @@ class RefcountAndFlags {
   }
 
   // Returns the current reference count using acquire semantics.
+  // 0010 count_ 每次加2
+  // 0100
+  // 0110
+
+  // 0001
+  // 0011
+  // 0101
   inline size_t Get() const {
+    // 最低位是标记位，右移1位后就是真实的计数
     return static_cast<size_t>(count_.load(std::memory_order_acquire) >>
                                kNumFlags);
   }
@@ -185,23 +221,43 @@ class RefcountAndFlags {
   // performs the memory barrier needed for the owning thread
   // to act on the object, knowing that it has exclusive access to the
   // object. Always returns false when the immortal bit is set.
+  // IsOne 函数通过原子操作判断对象的引用计数是否为 1
+  // immortal 被设置时总返回 false
+  // 引用计数为1意味着当前线程独占该对象的引用，没有其他线程共享。
   inline bool IsOne() {
+    // kImmortalFlag = 0001 ，表示不会被回收的对象
+    // kRefIncrement = 0010 ，表示有引用计数器，会被回收的对象
+    // 最后1位是标志位，引用计数器增加时，总数加 2，因为加1就表示对象不会被回收
+    // 因此 引用计数等于 kRefIncrement 就表示该对象只有一个引用
+
+    // 使用std::memory_order_acquire内存顺序加载 count_ 的值。
+    // 这确保了在此加载操作之前的所有写操作对当前线程来说都是可见的。
+    // 在多线程环境中，这作为一道屏障，确保了如果函数返回true，
+    // 当前线程可以安全地假设自己拥有对象的独占访问权，
+    // 因为在此之前的所有对对象状态的修改都已被观察到
     return count_.load(std::memory_order_acquire) == kRefIncrement;
   }
 
   bool IsImmortal() const {
+    // 是否设置了 kImmortalFlag 位
     return (count_.load(std::memory_order_relaxed) & kImmortalFlag) != 0;
   }
 
  private:
   // We reserve the bottom bit for flag.
+  // 保留最低有效位作为 flag
   // kImmortalBit indicates that this entity should never be collected; it is
   // used for the StringConstant constructor to avoid collecting immutable
   // constant cords.
   enum Flags {
+    // 0001
     kNumFlags = 1,
 
+    // 0001 表示资源永远不会被回收
+    // 当这个标志被设置时，表明该实体是“永生”的，比如字符串常量，
+    // 这样的设计可以确保这类不变的常量数据不会因为垃圾回收而被错误地释放。
     kImmortalFlag = 0x1,
+    // 0010
     kRefIncrement = (1 << kNumFlags),
   };
 
@@ -235,6 +291,11 @@ enum CordRepKind {
 // can perform this check in a single branch as 'tag >= EXTERNAL'
 // Note that we can leave this optimization to the compiler. The compiler will
 // DTRT when it sees a condition like `tag == EXTERNAL || tag >= FLAT`.
+// 这里的静态断言确保了两个常量FLAT和EXTERNAL之间满足特定的关系，
+// 即FLAT的值必须正好比EXTERNAL的值大1。
+// 具体来说，就是检查它是否是外部（EXTERNAL）类型或扁平（FLAT）类型。
+// 通过设定FLAT等于EXTERNAL + 1，可以在单个条件分支中高效地完成这一检查，
+// 即只需判断tag >= EXTERNAL即可同时覆盖EXTERNAL和FLAT两种情况。
 static_assert(FLAT == EXTERNAL + 1, "EXTERNAL and FLAT not consecutive");
 
 struct CordRep {
@@ -254,19 +315,26 @@ struct CordRep {
   constexpr CordRep(RefcountAndFlags::Immortal immortal, size_t l)
       : length(l), refcount(immortal), tag(EXTERNAL), storage{} {}
 
+  // 注释强调这三个字段的总大小需小于32字节，这是支持的最小平坦（flat）节点尺寸。
+  // 这种紧凑布局对于性能至关重要，尤其是在内存敏感和频繁复制的场景中。
   // The following three fields have to be less than 32 bytes since
   // that is the smallest supported flat node size. Some code optimizations rely
   // on the specific layout of these fields. Notably: the non-trivial field
   // `refcount` being preceded by `length`, and being tailed by POD data
   // members only.
+  // refcount 字段 在 length 和 tag(POD类型) 中间，
+  // 这种布局有利于特定的代码优化，比如对齐和快速访问。
+  // refcount 之后定义的成员变量一应该全部是 POD 类型
   // # LINT.IfChange
   size_t length;
   RefcountAndFlags refcount;
   // If tag < FLAT, it represents CordRepKind and indicates the type of node.
   // Otherwise, the node type is CordRepFlat and the tag is the encoded size.
+  // 如果 tag < FLAT，则表示 CordRepKind 并且指示节点类型。
+  // 如果 tag >= FLAT，则表示 CordRepFlat 并且标记是编码大小。
   uint8_t tag;
 
-  // `storage` provides two main purposes:
+  // `storage` provides two main purposes: 下面应该是 CordRepFlat.Data()
   // - the starting point for FlatCordRep.Data() [flexible-array-member]
   // - 3 bytes of additional storage for use by derived classes.
   // The latter is used by CordrepConcat and CordRepBtree. CordRepConcat stores
@@ -274,6 +342,11 @@ struct CordRep {
   // `height`, `begin` and `end` in the 3 entries. Otherwise we would need to
   // allocate room for these in the derived class, as not all compilers reuse
   // padding space from the base class (clang and gcc do, MSVC does not, etc)
+  // 否则，我们需要在派生类中为它们分配空间，因为并非所有编译器都重用基类中的填充空间
+
+  // 对于 CordRepFlat，storage 存储 FlatCordRep.Data() 的开始指针
+  // 对于 CordrepConcat 在 storage[0] 存储深度
+  // 对于 CordRepBtree 存储  `height`, `begin` and `end`
   uint8_t storage[3];
   // # LINT.ThenChange(cord_rep_btree.h:copy_raw)
 
@@ -336,6 +409,10 @@ using ExternalReleaserInvoker = void (*)(CordRepExternal*);
 
 // External CordReps are allocated together with a type erased releaser. The
 // releaser is stored in the memory directly following the CordRepExternal.
+
+// CordRepExternal 实例与其类型擦除的释放器（releaser）一起分配内存，
+// 释放器存储在CordRepExternal实例之后的内存中。
+// 这意味着每个外部数据节点都内嵌了其数据的生命周期管理逻辑
 struct CordRepExternal : public CordRep {
   CordRepExternal() = default;
   explicit constexpr CordRepExternal(absl::string_view str)
@@ -352,13 +429,23 @@ struct CordRepExternal : public CordRep {
   static void Delete(CordRep* rep);
 };
 
+// C++的函数重载解析遵循一定的规则来决定哪个函数是最合适的候选。
+// 其中一个规则涉及最佳匹配原则，即当多个重载函数都能匹配调用时，
+// 编译器会选择最具体匹配的那个。在使用Rank0和Rank1作为函数参数的情况下，
+// 如果一个函数模板期待Rank1，而另一个可以接受Rank0（因为Rank1是Rank0的子类），
+// 那么传入Rank1实例时，优先匹配期待Rank1的版本，因为它提供了更精确的匹配。
+
 // Use go/ranked-overloads for dispatching.
 struct Rank0 {};
 struct Rank1 : Rank0 {};
 
+// 期望Releaser类型能够接受一个absl::string_view类型的参数。
+// 这通过typename = ::absl::base_internal::invoke_result_t<Releaser,
+// absl::string_view>实现
 template <typename Releaser, typename = ::absl::base_internal::invoke_result_t<
                                  Releaser, absl::string_view>>
 void InvokeReleaser(Rank1, Releaser&& releaser, absl::string_view data) {
+  // 函数调用
   ::absl::base_internal::invoke(std::forward<Releaser>(releaser), data);
 }
 
@@ -369,18 +456,30 @@ void InvokeReleaser(Rank0, Releaser&& releaser, absl::string_view) {
 }
 
 // We use CompressedTuple so that we can benefit from EBCO.
+// CompressedTuple 是一个空类
+// 额外的 int 参数是一个技巧，用于避免与潜在的复制或移动构造函数冲突，
+// 同时仍能完美转发releaser参数
+
 template <typename Releaser>
 struct CordRepExternalImpl
     : public CordRepExternal,
       public ::absl::container_internal::CompressedTuple<Releaser> {
   // The extra int arg is so that we can avoid interfering with copy/move
   // constructors while still benefitting from perfect forwarding.
+
+  // 这里继承了 CompressedTuple，其元素就存在一个 tuple 中
+  // 即 release 函数的指针存在 tuple 中，可以用 get 取其中的值
   template <typename T>
   CordRepExternalImpl(T&& releaser, int)
+      // 初始化一个类
       : CordRepExternalImpl::CompressedTuple(std::forward<T>(releaser)) {
     this->releaser_invoker = &Release;
   }
 
+  // template关键字出现在这里是为了告诉编译器，接下来的get<0>()是一个模板成员函数的调用。
+  // 这是因为当你在模板类的内部或者模板函数内部尝试访问
+  // 另一个模板（如基类或成员中的模板）时，编译器需要额外的信息来解析这个调用。
+  //  get(0) 从 CompressedTuple 取第一个元素
   ~CordRepExternalImpl() {
     InvokeReleaser(Rank1{}, std::move(this->template get<0>()),
                    absl::string_view(base, length));
@@ -444,6 +543,9 @@ struct ConstInitExternalStorage {
   ABSL_CONST_INIT static CordRepExternal value;
 };
 
+// 初始化外部静态成员变量: 在模板结构体ConstInitExternalStorage外部，
+// 通过显式地提供初始化表达式来定义并初始化静态成员变量value。
+// 这一步是必要的，因为C++标准要求静态数据成员在类定义之外进行定义
 template <typename Str>
 ABSL_CONST_INIT CordRepExternal
     ConstInitExternalStorage<Str>::value(Str::value);
@@ -470,6 +572,17 @@ static_assert(sizeof(cordz_info_t) >= sizeof(intptr_t), "");
 // LittleEndianByte() creates a little endian representation of 'value', i.e.:
 // a little endian value where the first byte in the host's representation
 // holds 'value`, with all other bytes being 0.
+
+// 用:
+// 这个函数确保了无论在哪种字节序的机器上运行，都能得到一个符合小端字节序的表示，
+// 其中第一个字节（在内存中的低地址部分）存储 value，其余字节为0
+//  0x1234
+// 小端
+// 地址 0x00: 34
+// 地址 0x01: 12
+// 大端
+// 地址 0x00: 12
+// 地址 0x01: 34
 static constexpr cordz_info_t LittleEndianByte(unsigned char value) {
 #if defined(ABSL_IS_BIG_ENDIAN)
   return static_cast<cordz_info_t>(value) << ((sizeof(cordz_info_t) - 1) * 8);
@@ -538,12 +651,17 @@ class InlineData {
 
   // Poisons the unused inlined SSO data if the current instance
   // is inlined, else un-poisons the entire instance.
+  // 如果当前实例是 inlined ,则毒化 未使用的 inlined SSO data
   constexpr void poison();
 
   // Un-poisons this instance.
+  // 这个函数用于取消毒化（unpoison）当前实例的所有内存。
+  // 换句话说，它清除之前设置的毒化标记，使得内存区域被视为有效且可安全使用
   constexpr void unpoison();
 
   // Poisons the current instance. This is used on default initialization.
+  // 此函数专门用于在默认初始化时毒化当前实例。这意味着当对象被创建但没有明确地给予初始值时，
+  // 它的内存会被自动毒化，以增强安全性，防止未初始化的对象被错误地访问或使用。
   constexpr void poison_this();
 
   // Returns true if the current instance is empty.
@@ -551,6 +669,7 @@ class InlineData {
   bool is_empty() const { return rep_.tag() == 0; }
 
   // Returns true if the current instance holds a tree value.
+  // rep 里面定义了一个union {data,as_tree} 最后1位是1，则是tree
   bool is_tree() const { return (rep_.tag() & 1) != 0; }
 
   // Returns true if the current instance holds a cordz_info value.
@@ -563,6 +682,7 @@ class InlineData {
   // Returns true if either of the provided instances hold a cordz_info value.
   // This method is more efficient than the equivalent `data1.is_profiled() ||
   // data2.is_profiled()`. Requires both arguments to hold a tree.
+  // 如果 data1 或 data2 持有 cordz_info 值，则返回 true。
   static bool is_either_profiled(const InlineData& data1,
                                  const InlineData& data2) {
     assert(data1.is_tree() && data2.is_tree());
@@ -578,7 +698,7 @@ class InlineData {
     intptr_t info = static_cast<intptr_t>(absl::little_endian::ToHost64(
         static_cast<uint64_t>(rep_.cordz_info())));
     assert(info & 1);
-    return reinterpret_cast<CordzInfo*>(info - 1);
+    return reinterpret_cast<CordzInfo*>(info -1);  // info 是整型，可以安全存储指针
   }
 
   // Sets the current cordz_info sampling instance for this instance, or nullptr
@@ -586,6 +706,7 @@ class InlineData {
   // Requires the current instance to hold a tree value.
   void set_cordz_info(CordzInfo* cordz_info) {
     assert(is_tree());
+    // 将cordz_info指针转换为uintptr_t类型，并设置其最低位为1
     uintptr_t info = reinterpret_cast<uintptr_t>(cordz_info) | 1;
     rep_.set_cordz_info(
         static_cast<cordz_info_t>(absl::little_endian::FromHost64(info)));
@@ -631,7 +752,7 @@ class InlineData {
   void set_inline_data(const char* data, size_t n) {
     ABSL_ASSERT(n <= kMaxInline);
     unpoison();
-    rep_.set_tag(static_cast<int8_t>(n << 1));
+    rep_.set_tag(static_cast<int8_t>(n << 1));  // 设置tag，长度左移1位后保存
     SmallMemmove<true>(rep_.as_chars(), data, n);
     poison();
   }
@@ -717,15 +838,18 @@ class InlineData {
     // Disable sanitizer as we must always be able to read `tag`.
     ABSL_CORD_INTERNAL_NO_SANITIZE
     int8_t tag() const { return reinterpret_cast<const int8_t*>(this)[0]; }
+    // 该类只有一个成员变量 union  , 所以直接用 data 就行了
     void set_tag(int8_t rhs) { reinterpret_cast<int8_t*>(this)[0] = rhs; }
 
-    char* as_chars() { return data + 1; }
+    char* as_chars() { return data + 1; }  // 第1个字节存 tag，之后存 data
     const char* as_chars() const { return data + 1; }
 
+    // tag 字节第1为是1 说明是 tree
     bool is_tree() const { return (tag() & 1) != 0; }
 
     size_t inline_size() const {
       ABSL_ASSERT(!is_tree());
+      // 存储size 时进行了左移
       return static_cast<size_t>(tag()) >> 1;
     }
 
@@ -738,11 +862,12 @@ class InlineData {
     void set_tree(CordRep* rhs) { as_tree.rep = rhs; }
 
     cordz_info_t cordz_info() const { return as_tree.cordz_info; }
+    // 将 cordz_info 对象的指针地址 转为 int64 ,再 + 1
     void set_cordz_info(cordz_info_t rhs) { as_tree.cordz_info = rhs; }
 
     void make_tree(CordRep* tree) {
-      as_tree.rep = tree;
-      as_tree.cordz_info = kNullCordzInfo;
+      as_tree.rep = tree;                   // 指针赋值
+      as_tree.cordz_info = kNullCordzInfo;  // 标记时 tree 类型
     }
 
 #ifdef ABSL_INTERNAL_CORD_HAVE_SANITIZER
@@ -768,6 +893,10 @@ class InlineData {
     // store the size in the first char of `data` shifted left + 1.
     // Else we store it in a tree and store a pointer to that tree in
     // `as_tree.rep` with a tagged pointer to make `tag() & 1` non zero.
+    // 当这个union作为结构体的一个成员时，结构体的总大小还会包括其他成员的大小
+    // 以及可能的内存对齐开销。结构体的总大小至少会包含这个union的最大成员大小，
+    // 同时也会根据结构体内成员的排列和特定编译器及平台的对齐规则进行适当的内存对齐，
+    // 以优化访问速度或满足硬件要求
     union {
       char data[kMaxInline + 1];
       AsTree as_tree;
@@ -851,6 +980,7 @@ inline InlineData& InlineData::operator=(const InlineData&) noexcept = default;
 
 constexpr void InlineData::poison_this() {}
 constexpr void InlineData::unpoison() {}
+// 这里实现为空，什么都没做，因为编译器不支持
 constexpr void InlineData::poison() {}
 
 #endif  // ABSL_INTERNAL_CORD_HAVE_SANITIZER
@@ -883,10 +1013,31 @@ inline CordRep* CordRep::Ref(CordRep* rep) {
   return rep;
 }
 
+// 原子操作的成本： 原子操作（如原子减一）保证了在多线程环境中操作的完整性，防止了数据竞争。但是，
+// 原子操作通常比非原子操作成本更高，因为它们需要硬件级别的锁或其他同步机制来确保操作的原子性。
+// 这意味着原子操作可能涉及更多的 CPU 周期和潜在的缓存失效，从而影响性能
+
+// 分支预测: 现代处理器使用分支预测技术来猜测程序中分支（if语句）的结果，
+// 以便提前执行可能的路径，从而提高指令流水线的效率。如果分支预测准确，那么即使存在分支，
+// 性能也不会受到太大影响。但是，如果预测错误，处理器可能需要回退并重新执行正确的路径，
+// 这会导致性能下降
+
+// 在 CordRep::Unref 函数中，作者选择避免在引用计数为1的情况下执行原子减一操作。
+// 这是因为当引用计数为1时，原子减一操作实际上没有必要，因为减一后引用计数必然变为0，
+// 此时可以安全地销毁对象。通过避免在这种情况下执行原子操作，可以节省原子操作的开销。
+
+// 在 CordRep::Unref 函数中，作者选择避免在引用计数为1的情况下执行原子减一操作。
+// 这是因为当引用计数为1时，原子减一操作实际上没有必要，因为减一后引用计数必然变为0，
+// 此时可以安全地销毁对象。通过避免在这种情况下执行原子操作，可以节省原子操作的开销。
+// 同时，代码中增加了一个额外的分支来检查引用计数是否为1，这可能会引入一些额外的分支预测
+// 开销。但是，根据注释，作者认为避免原子操作的成本通常会超过这个额外分支带来的开销。这是因为：
+//    1.分支预测通常很准确，尤其是在引用计数较高的情况下，分支很少会被采取。
+//    2.原子操作的开销相对较高，特别是在高并发场景下。
 inline void CordRep::Unref(CordRep* rep) {
   assert(rep != nullptr);
   // Expect refcount to be 0. Avoiding the cost of an atomic decrement should
   // typically outweigh the cost of an extra branch checking for ref == 1.
+  // 引用计数大于1则条件判断成功
   if (ABSL_PREDICT_FALSE(!rep->refcount.DecrementExpectHighRefcount())) {
     Destroy(rep);
   }

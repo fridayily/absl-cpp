@@ -105,6 +105,8 @@ class BadStatusOrAccess : public std::exception {
   void InitWhat() const;
 
   absl::Status status_;
+
+  // mutable关键字再次被用来允许在const上下文中修改这个字符串，这在初始化错误信息时是必要的。
   mutable absl::once_flag init_what_;
   mutable std::string what_;
 };
@@ -194,6 +196,10 @@ class StatusOr : private internal_statusor::StatusOrData<T>,
                  private internal_statusor::MoveCtorBase<T>,
                  private internal_statusor::CopyAssignBase<T>,
                  private internal_statusor::MoveAssignBase<T> {
+  // 声明了所有StatusOr<U>（无论U是什么类型）都是当前StatusOr<T>的友元类
+  // 这意味着不同泛型参数的StatusOr类之间可以访问彼此的私有和保护成员，
+  // 这对于实现类型转换和一致性操作非常有用，
+  // 如在类型U可转换为类型T时，允许StatusOr<U>到StatusOr<T>的转换
   template <typename U>
   friend class StatusOr;
 
@@ -208,12 +214,19 @@ class StatusOr : private internal_statusor::StatusOrData<T>,
   typedef T value_type;
 
   // Constructors
-
+  // absl::StatusOr是一个实用类型，旨在替代传统的错误码与结果值的组合，
+  // 它既可以存储一个成功的值（模板参数类型T），
+  // 也可以存储一个错误状态（使用absl::Status表示）。当操作成功时，
+  // 你可以获取到期望类型的值；当操作失败时，则得到一个错误状态。
   // Constructs a new `absl::StatusOr` with an `absl::StatusCode::kUnknown`
   // status. This constructor is marked 'explicit' to prevent usages in return
   // values such as 'return {};', under the misconception that
   // `absl::StatusOr<std::vector<int>>` will be initialized with an empty
   // vector, instead of an `absl::StatusCode::kUnknown` error code.
+  // 这样的设计是为了防止开发者错误地认为，对于像absl::StatusOr<std::vector<int>>
+  // 这样的类型，使用默认构造（如return {};）会得到一个空的std::vector<int>实例。实际上，
+  // 它会创建一个带有kUnknown错误码的absl::StatusOr对象，
+  // 表明操作没有成功完成，也没有提供具体的值
   explicit StatusOr();
 
   // `StatusOr<T>` is copy constructible if `T` is copy constructible.
@@ -240,20 +253,27 @@ class StatusOr : private internal_statusor::StatusOrData<T>,
                             internal_statusor::IsConstructionFromStatusOrValid<
                                 false, T, U, false, const U&>::value,
                             int> = 0>
+  // 该构造函数使用基类的拷贝构造来初始化当前对象。这里Base是当前StatusOr类的基类，
+  // 构造时通过强制类型转换将other（一个const StatusOr<U>的引用）转换为其基类引用，
+  // 然后调用基类的拷贝构造函数。
   StatusOr(const StatusOr<U>& other)  // NOLINT
       : Base(static_cast<const typename StatusOr<U>::Base&>(other)) {}
+
   template <typename U, absl::enable_if_t<
                             internal_statusor::IsConstructionFromStatusOrValid<
                                 false, T, U, true, const U&>::value,
                             int> = 0>
   StatusOr(const StatusOr<U>& other ABSL_ATTRIBUTE_LIFETIME_BOUND)  // NOLINT
       : Base(static_cast<const typename StatusOr<U>::Base&>(other)) {}
+
+
   template <typename U, absl::enable_if_t<
                             internal_statusor::IsConstructionFromStatusOrValid<
                                 true, T, U, false, const U&>::value,
                             int> = 0>
   explicit StatusOr(const StatusOr<U>& other)
       : Base(static_cast<const typename StatusOr<U>::Base&>(other)) {}
+
   template <typename U, absl::enable_if_t<
                             internal_statusor::IsConstructionFromStatusOrValid<
                                 true, T, U, true, const U&>::value,
@@ -267,24 +287,31 @@ class StatusOr : private internal_statusor::StatusOrData<T>,
                             int> = 0>
   StatusOr(StatusOr<U>&& other)  // NOLINT
       : Base(static_cast<typename StatusOr<U>::Base&&>(other)) {}
+
   template <typename U, absl::enable_if_t<
                             internal_statusor::IsConstructionFromStatusOrValid<
                                 false, T, U, true, U&&>::value,
                             int> = 0>
   StatusOr(StatusOr<U>&& other ABSL_ATTRIBUTE_LIFETIME_BOUND)  // NOLINT
       : Base(static_cast<typename StatusOr<U>::Base&&>(other)) {}
+
+
   template <typename U, absl::enable_if_t<
                             internal_statusor::IsConstructionFromStatusOrValid<
                                 true, T, U, false, U&&>::value,
                             int> = 0>
   explicit StatusOr(StatusOr<U>&& other)
       : Base(static_cast<typename StatusOr<U>::Base&&>(other)) {}
+
+
   template <typename U, absl::enable_if_t<
                             internal_statusor::IsConstructionFromStatusOrValid<
                                 true, T, U, true, U&&>::value,
                             int> = 0>
   explicit StatusOr(StatusOr<U>&& other ABSL_ATTRIBUTE_LIFETIME_BOUND)
-      : Base(static_cast<typename StatusOr<U>::Base&&>(other)) {}
+      : Base(static_cast<typename StatusOr<U>::Base&&>(other)) {
+    std::cout << "explicit StatusOr(StatusOr<U>&& other)" << std::endl;
+  }
 
   // Converting Assignment Operators
 
@@ -360,6 +387,8 @@ class StatusOr : private internal_statusor::StatusOrData<T>,
                                   true, T, U>::value,
                               int> = 0>
   explicit StatusOr(U&& v) : Base(std::forward<U>(v)) {}
+
+
   template <typename U = absl::Status,
             absl::enable_if_t<internal_statusor::IsConstructionFromStatusValid<
                                   false, T, U>::value,
@@ -417,6 +446,12 @@ class StatusOr : private internal_statusor::StatusOrData<T>,
   // This constructor is explicit if `U` is not convertible to `T`. To avoid
   // ambiguity, this constructor is disabled if `U` is a `StatusOr<J>`, where
   // `J` is convertible to `T`.
+
+  // u 是 std::unique_str 时调用这里
+  // 使用absl::in_place标签指示在当前位置构造T类型的对象，并使用std::forward<U>(u)
+  // 完美转发参数u。这样可以确保无论是左值还是右值都能正确处理，
+  // 且如果U类型与T不同，也能正确转换并构造。
+  // 确保只有当类型U能够安全地转换和构造为类型T时，才能创建StatusOr<T>对象
   template <typename U = T,
             absl::enable_if_t<internal_statusor::IsConstructionValid<
                                   false, T, U, false>::value,
@@ -597,6 +632,9 @@ class StatusOr : private internal_statusor::StatusOrData<T>,
   using internal_statusor::StatusOrData<T>::AssignStatus;
 
  private:
+  // 引入了基类internal_statusor::StatusOrData<T>中的Assign方法到当前作用域。
+  // 这样做是为了能够在StatusOr<T>类内部直接访问并可能重载这个方法，
+  // 而不需要通过基类指针或引用
   using internal_statusor::StatusOrData<T>::Assign;
   template <typename U>
   void Assign(const absl::StatusOr<U>& other);
@@ -683,6 +721,12 @@ inline void StatusOr<T>::Assign(StatusOr<U>&& other) {
     this->AssignStatus(std::move(other).status());
   }
 }
+
+// 它利用变长模板参数列表Args...来接收任意数量和类型的参数，
+// 并使用完美转发（std::forward<Args>(args)...）来传递这些参数。
+// 这个构造函数是为了在类StatusOr<T>内部直接构造一个类型为T的对象，
+// 而absl::in_place_t是一个类型标签，用来指示构造函数应该直接在内存位置上构造对象，
+// 而不是拷贝或移动一个已经存在的对象。
 template <typename T>
 template <typename... Args>
 StatusOr<T>::StatusOr(absl::in_place_t, Args&&... args)

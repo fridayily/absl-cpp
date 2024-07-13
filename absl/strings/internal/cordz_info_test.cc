@@ -65,6 +65,7 @@ std::string FormatStack(absl::Span<void* const> raw_stack) {
 
 TEST(CordzInfoTest, TrackCord) {
   TestCordData data;
+  // 为 InlineData 实例添加 CordzInfo 信息
   CordzInfo::TrackCord(data.data, kTrackCordMethod, 1);
   CordzInfo* info = data.data.cordz_info();
   ASSERT_THAT(info, Ne(nullptr));
@@ -124,6 +125,7 @@ TEST(CordzInfoTest, UntrackCord) {
   CordzInfo* info = data.data.cordz_info();
 
   info->Untrack();
+  // DeleteQueue 返回可以删除的 std::vector<const CordzHandle*>
   EXPECT_THAT(DeleteQueue(), SizeIs(0u));
 }
 
@@ -144,9 +146,9 @@ TEST(CordzInfoTest, SetCordRep) {
   CordzInfo::TrackCord(data.data, kTrackCordMethod, 1);
   CordzInfo* info = data.data.cordz_info();
 
-  TestCordRep rep;
+  TestCordRep rep; // rep 实例 new 的对象会在析构函数中释放
   info->Lock(CordzUpdateTracker::kAppendCord);
-  info->SetCordRep(rep.rep);
+  info->SetCordRep(rep.rep); // 更换 info 指向的 rep
   info->Unlock();
   EXPECT_THAT(info->GetCordRepForTesting(), Eq(rep.rep));
 
@@ -187,6 +189,16 @@ TEST(CordzInfoTest, SetCordRepRequiresMutex) {
   CordzInfo* info = data.data.cordz_info();
   TestCordRep rep;
   EXPECT_DEBUG_DEATH(info->SetCordRep(rep.rep), ".*");
+  info->Untrack();
+}
+
+TEST(CordzInfoTest, SetCordRepWithoutMutex) {
+  TestCordData data;
+  CordzInfo::TrackCord(data.data, kTrackCordMethod, 1);
+  CordzInfo* info = data.data.cordz_info();
+  TestCordRep rep;
+  // 没有线程保护，会触发异常
+  info->SetCordRep(rep.rep);
   info->Untrack();
 }
 

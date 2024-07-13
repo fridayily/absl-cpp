@@ -42,6 +42,15 @@ struct Blob {
 
   // no crash: NoDestructor indeed does not destruct (the moved-out Blob
   // temporaries do get destroyed though)
+  // 如果表达式求值为false，宏可能会记录错误信息、终止程序或采取其他开发者定义的错误处理动作。
+  // 在这里，它用来确保moved_out成员变量的值为true。
+  // 比如当对象通过移动构造函数或移动赋值操作符被转移后，原始对象的资源会被接管，
+  // 此时原始对象应被标记为已移动（moved_out = true），以防止后续的错误访问。
+
+  // 这段代码的目的是确保当Blob对象被销毁时，它要么没有被移动过
+  // （即moved_out == false的情况应该在之前的操作中被处理，不应该到达析构阶段），
+  // 要么已经被正确标记为已移动（moved_out == true），以此来避免潜在的资源管理
+  // 错误或逻辑不一致。这是一种保护措施，有助于提升代码的健壮性和可靠性。
   ~Blob() { ABSL_INTERNAL_CHECK(moved_out, "~Blob"); }
 
   int val;
@@ -59,12 +68,20 @@ TEST(NoDestructorTest, DestructorNeverCalled) {
 
 TEST(NoDestructorTest, Noncopyable) {
   using T = absl::NoDestructor<int>;
-
+  // 检查类型T是否可以直接从另一个同类型的对象构造
+  // 这些断言检验了absl::NoDestructor<int>类型的不可构造性，确保了通过复制、引用
+  // 或const引用等方式无法创建新的同类实例，这符合NoDestructor设计用于持有单一、
+  // 不可变对象的初衷。
   EXPECT_FALSE((std::is_constructible<T, T>::value));
   EXPECT_FALSE((std::is_constructible<T, const T>::value));
   EXPECT_FALSE((std::is_constructible<T, T&>::value));
   EXPECT_FALSE((std::is_constructible<T, const T&>::value));
 
+  // 检查是否可以将一个T类型的对象直接赋值给T类型的引用
+  // 这些断言共同验证了absl::NoDestructor<int>类型的不可赋值性，无论是直接对象、
+  // 常量对象还是对象的引用，都不能用来改变现有实例的值。这符合NoDestructor设计的初衷，
+  // 即确保封装的对象在其生命周期内既不会被销毁，也不会被修改，
+  // 提供了严格的不变性和内存管理控制。
   EXPECT_FALSE((std::is_assignable<T&, T>::value));
   EXPECT_FALSE((std::is_assignable<T&, const T>::value));
   EXPECT_FALSE((std::is_assignable<T&, T&>::value));

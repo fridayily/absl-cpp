@@ -250,7 +250,7 @@ template <typename Delimiter>
 struct SelectDelimiter {
   using type = Delimiter;
 };
-
+// 模板特例化
 template <>
 struct SelectDelimiter<char> {
   using type = ByChar;
@@ -510,21 +510,25 @@ using EnableSplitIfString =
 //   absl::StrSplit(absl::string_view(), '-');    // {}, but should be {""}
 //
 // Try not to depend on this distinction because the bug may one day be fixed.
-template <typename Delimiter>
+template <typename Delimiter> // 类型参数模板
 strings_internal::Splitter<
     typename strings_internal::SelectDelimiter<Delimiter>::type, AllowEmpty,
-    absl::string_view>
+    absl::string_view> // 返回值是一个Splitter对象
 StrSplit(strings_internal::ConvertibleToStringView text, Delimiter d) {
+  // 根据Delimiter类型选择对应的DelimiterType，这里是一个类型，还没有实例化，如 ByString
   using DelimiterType =
       typename strings_internal::SelectDelimiter<Delimiter>::type;
+  // 根据传入的Delimiter类型，实例化一个 Splitter 对象
   return strings_internal::Splitter<DelimiterType, AllowEmpty,
                                     absl::string_view>(
+      // 这里对 DelimiterType(d) 进行实例化,如 ByString(d)
       text.value(), DelimiterType(d), AllowEmpty());
 }
 
 template <typename Delimiter, typename StringType,
           EnableSplitIfString<StringType> = 0>
 strings_internal::Splitter<
+    // type 是SelectDelimiter的一个成员变量
     typename strings_internal::SelectDelimiter<Delimiter>::type, AllowEmpty,
     std::string>
 StrSplit(StringType&& text, Delimiter d) {

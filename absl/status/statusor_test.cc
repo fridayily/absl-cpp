@@ -111,6 +111,12 @@ class CopyNoAssign {
   const CopyNoAssign& operator=(const CopyNoAssign&);
 };
 
+// absl::make_unique<int>(0)创建了一个指向整数值为0的新int的std::unique_ptr实例。
+// 这个std::unique_ptr<int>实例被用来初始化absl::StatusOr<std::unique_ptr<int>>，
+// 因为absl::StatusOr有一个可以接受任意类型T的右值引用（T&&）的构造函数，
+// 这里的T即是std::unique_ptr<int>。所以，当函数返回时，
+// 实际上是创建了一个absl::StatusOr对象，其内部包含了
+//        成功状态和一个std::unique_ptr<int>智能指针。
 absl::StatusOr<std::unique_ptr<int>> ReturnUniquePtr() {
   // Uses implicit constructor from T&&
   return absl::make_unique<int>(0);
@@ -124,6 +130,15 @@ TEST(StatusOr, ElementType) {
 TEST(StatusOr, TestMoveOnlyInitialization) {
   absl::StatusOr<std::unique_ptr<int>> thing(ReturnUniquePtr());
   ASSERT_TRUE(thing.ok());
+  // 双星号 ** 的使用源于 thing 是一个指向 std::unique_ptr<int> 的指针，
+  // 而 std::unique_ptr<int> 又持有着一个 int 类型的指针
+
+  // 第一层星号 (*)： 当你对 thing 使用 * 操作符时，你是从 absl::StatusOr<std::unique_ptr<int>>
+  // 对象中解引用得到内部的 std::unique_ptr<int> 对象。
+  // 这是因为 thing 实际上是一个智能指针（std::unique_ptr），
+  // 它被嵌套在 absl::StatusOr 容器中。
+  // 第二层星号 (*): 接下来，当你再次对得到的 std::unique_ptr<int> 使用 * 操作符，
+  // 你是在解引用这个智能指针以获取它所指向的实际 int 值
   EXPECT_EQ(0, **thing);
   int* previous = thing->get();
 

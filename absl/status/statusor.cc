@@ -33,6 +33,7 @@ BadStatusOrAccess::BadStatusOrAccess(absl::Status status)
 BadStatusOrAccess::BadStatusOrAccess(const BadStatusOrAccess& other)
     : status_(other.status_) {}
 
+// 拷贝赋值运算符
 BadStatusOrAccess& BadStatusOrAccess::operator=(
     const BadStatusOrAccess& other) {
   // Ensure assignment is correct regardless of whether this->InitWhat() has
@@ -43,6 +44,7 @@ BadStatusOrAccess& BadStatusOrAccess::operator=(
   return *this;
 }
 
+// 移动赋值运算符
 BadStatusOrAccess& BadStatusOrAccess::operator=(BadStatusOrAccess&& other) {
   // Ensure assignment is correct regardless of whether this->InitWhat() has
   // already been called.
@@ -52,6 +54,8 @@ BadStatusOrAccess& BadStatusOrAccess::operator=(BadStatusOrAccess&& other) {
   return *this;
 }
 
+// 移动构造函数是一种特殊的构造函数，当一个临时对象或者将要被销毁的对象（即右值）
+// 被用作新对象的初始化时被调用，其目的是高效地转移资源所有权而不是复制资源
 BadStatusOrAccess::BadStatusOrAccess(BadStatusOrAccess&& other)
     : status_(std::move(other.status_)) {}
 
@@ -63,6 +67,7 @@ absl::Nonnull<const char*> BadStatusOrAccess::what() const noexcept {
 const absl::Status& BadStatusOrAccess::status() const { return status_; }
 
 void BadStatusOrAccess::InitWhat() const {
+  // init_what_ 和 call_once 确保了 what_ 只被初始化一次
   absl::call_once(init_what_, [this] {
     what_ = absl::StrCat("Bad StatusOr access: ", status_.ToString());
   });

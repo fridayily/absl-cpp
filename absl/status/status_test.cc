@@ -45,14 +45,20 @@ TEST(StatusCode, InsertionOperator) {
 // its creator, and its classifier.
 struct ErrorTest {
   absl::StatusCode code;
+  // 该指针指向一个接受absl::string_view参数并返回absl::Status对象的函数
   using Creator = absl::Status (*)(
       absl::string_view
   );
+  // 该指针指向一个接受const absl::Status&参数并返回bool的函数。
+  // 这个函数用于根据absl::Status对象来分类错误，可能检查状态码或其他属性，
+  // 然后返回一个布尔值表示是否匹配。
   using Classifier = bool (*)(const absl::Status&);
   Creator creator;
   Classifier classifier;
 };
 
+// ErrorTest 的数组
+// 里面包含三个元素 StatusCode、Creator 函数和 Classifier 函数
 constexpr ErrorTest kErrorTests[]{
     {absl::StatusCode::kCancelled, absl::CancelledError, absl::IsCancelled},
     {absl::StatusCode::kUnknown, absl::UnknownError, absl::IsUnknown},
@@ -180,6 +186,16 @@ constexpr char kPayload3[] = "ccccc";
 
 using PayloadsVec = std::vector<std::pair<std::string, absl::Cord>>;
 
+TEST(ExampleTest, EqualityTest) {
+  int value = 5;
+  EXPECT_THAT(value, Eq(5));  // 检查value是否等于5
+}
+
+TEST(OptionalTest, CheckOptionalValue) {
+  std::optional<int> opt_value = 5;
+  EXPECT_THAT(opt_value, Optional(Eq(5)));  // 检查opt_value是否是非空且其值等于5
+}
+
 TEST(Status, TestGetSetPayload) {
   absl::Status ok_status = absl::OkStatus();
   ok_status.SetPayload(kUrl1, absl::Cord(kPayload1));
@@ -191,6 +207,8 @@ TEST(Status, TestGetSetPayload) {
   absl::Status bad_status(absl::StatusCode::kInternal, "fail");
   bad_status.SetPayload(kUrl1, absl::Cord(kPayload1));
   bad_status.SetPayload(kUrl2, absl::Cord(kPayload2));
+
+
 
   EXPECT_THAT(bad_status.GetPayload(kUrl1), Optional(Eq(kPayload1)));
   EXPECT_THAT(bad_status.GetPayload(kUrl2), Optional(Eq(kPayload2)));
@@ -298,7 +316,7 @@ TEST(Status, TestForEachPayload) {
     scratch.back().SetPayload(kUrl1, absl::Cord(kPayload1));
     scratch.back().SetPayload(kUrl2, absl::Cord(kPayload2));
     scratch.back().SetPayload(kUrl3, absl::Cord(kPayload3));
-
+    // AllVisitedPayloads 根据分配的地址不同可能会逆序查找
     if (AllVisitedPayloads(scratch.back()) != visited_payloads) {
       break;
     }
@@ -332,6 +350,8 @@ TEST(Status, ToStringMode) {
               AllOf(HasSubstr("INTERNAL: fail"), HasSubstr("[foo='bar']"),
                     HasSubstr("[bar='\\xff']")));
 
+  // AllOf是一个谓词组合器，确保其后的所有谓词都必须为真，整个表达式才判断为真。
+  // Not是一个谓词，用于否定后面的谓词结果。
   EXPECT_THAT(status.ToString(~absl::StatusToStringMode::kWithPayload),
               AllOf(HasSubstr("INTERNAL: fail"), Not(HasSubstr("[foo='bar']")),
                     Not(HasSubstr("[bar='\\xff']"))));

@@ -40,6 +40,18 @@ void TestFormatSpecifier(absl::Time t, absl::TimeZone tz,
 // Testing FormatTime()
 //
 
+TEST(FormatTime,China){
+  absl::TimeZone tz = absl::UTCTimeZone();
+  absl::Time t = absl::FromTimeT(0);
+
+  std::cout << absl::FormatTime("%Y-%m-%d %H:%M:%S", t, tz) << std::endl;
+
+  absl::Time t1 =  absl::Time();
+
+  std::cout << absl::FormatTime("%Y-%m-%d %H:%M:%S", t1, tz) << std::endl;
+
+}
+
 TEST(FormatTime, Basics) {
   absl::TimeZone tz = absl::UTCTimeZone();
   absl::Time t = absl::FromTimeT(0);

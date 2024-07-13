@@ -1333,6 +1333,8 @@ TEST(LenExceedsMaxSizeTest, LenExceedsMaxSize) {
 }
 #endif  // !defined(NDEBUG) && !defined(ABSL_USES_STD_STRING_VIEW)
 
+// std::ostringstream oss;
+// oss << std::right << std::setw(10) << 42;  // 输出 "     42"
 class StringViewStreamTest : public ::testing::Test {
  public:
   // Set negative 'width' for right justification.
@@ -1340,12 +1342,15 @@ class StringViewStreamTest : public ::testing::Test {
   std::string Pad(const T& s, int width, char fill = 0) {
     std::ostringstream oss;
     if (fill != 0) {
+      // 设置填充字符，默认填充字符是空格
       oss << std::setfill(fill);
     }
     if (width < 0) {
       width = -width;
+      // 按照右对齐的方式进行
       oss << std::right;
     }
+    // 用于设置输出流的下一个输出字段的宽度
     oss << std::setw(width) << s;
     return oss.str();
   }
@@ -1355,6 +1360,8 @@ TEST_F(StringViewStreamTest, Padding) {
   std::string s("hello");
   absl::string_view sp(s);
   for (int w = -64; w < 64; ++w) {
+    // 用于创建一个范围内的跟踪信息，通常与测试断言一起使用
+    // 失败时显示是 w 失败
     SCOPED_TRACE(w);
     EXPECT_EQ(Pad(s, w), Pad(sp, w));
   }

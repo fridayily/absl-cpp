@@ -161,6 +161,8 @@ ABSL_NAMESPACE_BEGIN
 //   absl::string_view(nullptr, 0) == absl::string_view("abcdef"+6, 0)
 class string_view {
  public:
+  // std::char_traits是一个模板类，位于C++标准库中，
+  // 专门设计来提供字符类型的基本操作特性，比如对字符的比较、复制、赋值等
   using traits_type = std::char_traits<char>;
   using value_type = char;
   using pointer = absl::Nullable<char*>;
@@ -204,6 +206,16 @@ class string_view {
   constexpr string_view(absl::Nullable<const char*> data, size_type len)
       : ptr_(data), length_(CheckLengthInternal(len)) {}
 
+  // 通常情况下，C++编译器会自动为类生成这些成员函数，但如果类中包含特定的成员（
+  // 如指针或动态分配的资源），则可能需要自定义这些操作以确保正确的行为。
+  // 然而，注释中提到，由于GDB的一个bug，显式地定义这些操作可能会导致问题。
+  // 因此，为了使调试过程不受影响，开发者选择不显式定义这两个函数，让编译器生成默认的实现。
+  // 默认的拷贝构造函数和拷贝赋运算符通常会进行浅拷贝，这在string_view的上下文中是安全的，
+  // 因为它不包含任何需要管理的资源，只是持有对原始数据的引用。
+  // 这意味着，即使没有显式定义，string_view的实例仍然可以被正确地复制和赋值，
+  // 而不会引入额外的错误或意外行为。当使用GDB进行调试时，这种方式可以避免潜在的调试器问题，
+  // 同时保持了类的行为正确性。
+
   // NOTE: Harmlessly omitted to work around gdb bug.
   //   constexpr string_view(const string_view&) noexcept = default;
   //   string_view& operator=(const string_view&) noexcept = default;
@@ -243,6 +255,12 @@ class string_view {
   const_reverse_iterator rbegin() const noexcept {
     return const_reverse_iterator(end());
   }
+
+  // 用法
+  // for (auto it = sv.rbegin(); it != sv.rend(); ++it) {
+  //    std::cout << *it;
+  // }
+
 
   // string_view::rend()
   //
@@ -658,6 +676,8 @@ class string_view {
  private:
   // The constructor from std::string delegates to this constructor.
   // See the comment on that constructor for the rationale.
+  // 用来表明从std::string或其他已知安全来源构造string_view时，可以跳过常规的边界检查，
+  // 因为这些检查已经在源对象的构造过程中完成过了。这样可以避免不必要的重复计算，提高性能
   struct SkipCheckLengthTag {};
   string_view(absl::Nullable<const char*> data, size_type len,
               SkipCheckLengthTag) noexcept

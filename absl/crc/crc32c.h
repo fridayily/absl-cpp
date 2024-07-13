@@ -149,6 +149,10 @@ crc32c_t MemcpyCrc32c(void* dest, const void* src, size_t count,
 // the concatenation of these two buffers.
 //
 // This operation has a runtime cost of O(log(`crc2_length`)).
+// crc1 字符串1的 crc
+// crc2 字符串2的 crc
+// crc2_length 字符串2的长度
+// 返回 字符串1+字符串2的 crc
 crc32c_t ConcatCrc32c(crc32c_t crc1, crc32c_t crc2, size_t crc2_length);
 
 // RemoveCrc32cPrefix()
@@ -162,6 +166,10 @@ crc32c_t ConcatCrc32c(crc32c_t crc1, crc32c_t crc2, size_t crc2_length);
 // value of the buffer with the prefix removed.
 //
 // This operation has a runtime cost of O(log(`remaining_string_length`)).
+// 前缀字符的crc prefix_crc
+// 整个字符串crc full_string_crc
+// 剩余字符串长度 remaining_string_length
+// 返回 移除前缀后字符串的crc
 crc32c_t RemoveCrc32cPrefix(crc32c_t prefix_crc, crc32c_t full_string_crc,
                             size_t remaining_string_length);
 // RemoveCrc32cSuffix()

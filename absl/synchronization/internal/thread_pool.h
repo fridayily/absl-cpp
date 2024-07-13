@@ -37,6 +37,9 @@ class ThreadPool {
   explicit ThreadPool(int num_threads) {
     threads_.reserve(num_threads);
     for (int i = 0; i < num_threads; ++i) {
+      //  this关键字在类的成员函数中代表当前对象的指针。在这里，
+      //  this指针被传递给std::thread构造函数，
+      //  表明新创建的线程将使用当前ThreadPool对象来调用WorkLoop函数
       threads_.push_back(std::thread(&ThreadPool::WorkLoop, this));
     }
   }
@@ -70,10 +73,16 @@ class ThreadPool {
 
   void WorkLoop() {
     while (true) {
+      // void()表示这个AnyInvocable对象存储的可调用对象不接受任何参数，
+      // 并且调用时不返回任何值
       absl::AnyInvocable<void()> func;
       {
         absl::MutexLock l(&mu_);
+        // this 这允许条件函数访问ThreadPool类的成员变量和方法。
+        // 第二个参数 (&ThreadPool::WorkAvailable): 是一个指向成员函数的指针
+        // 类似条件变量的await函数，用于等待条件变量变为真。
         mu_.Await(absl::Condition(this, &ThreadPool::WorkAvailable));
+        // 去除函数
         func = std::move(queue_.front());
         queue_.pop();
       }

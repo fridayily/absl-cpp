@@ -115,9 +115,11 @@ Status::Status(absl::StatusCode code, absl::string_view msg)
 absl::Nonnull<status_internal::StatusRep*> Status::PrepareToModify(
     uintptr_t rep) {
   if (IsInlined(rep)) {
+    // We need to clone the inlined rep.
     return new status_internal::StatusRep(InlinedRepToCode(rep),
                                           absl::string_view(), nullptr);
   }
+  // 对于不是 inline 的 StatusRep，重新 clone ，并减引用计数器
   return RepToPointer(rep)->CloneAndUnref();
 }
 

@@ -68,6 +68,7 @@ ABSL_NAMESPACE_BEGIN
 //   EXPECT_EQ("Bob bought 5 Apples. Thanks Bob!", s);
 ABSL_MUST_USE_RESULT std::string StrReplaceAll(
     absl::string_view s,
+    // 在初始化时直接列出元素值，常用于构造容器或传递给接受多个同类型参数的函数
     std::initializer_list<std::pair<absl::string_view, absl::string_view>>
         replacements);
 
@@ -151,7 +152,7 @@ struct ViableSubstitution {
     return old.size() > y.old.size();
   }
 };
-
+// 基于给定的替换列表，返回一个vector，其中包含所有 viable substitutions，可替换子串
 // Build a vector of ViableSubstitutions based on the given list of
 // replacements. subs can be implemented as a priority_queue. However, it turns
 // out that most callers have small enough a list of substitutions that the
@@ -173,12 +174,14 @@ std::vector<ViableSubstitution> FindSubstitutions(
     // but above condition is frequently true. That's why we test for this
     // now and not before.
     if (old.empty()) continue;
-
+    // 实例化ViableSubstitution
     subs.emplace_back(old, get<1>(rep), pos);
 
     // Insertion sort to ensure the last ViableSubstitution comes before
     // all the others.
+    // 插入排序
     size_t index = subs.size();
+    // --index 的值为 0 时，不会计算其他表达式
     while (--index && subs[index - 1].OccursBefore(subs[index])) {
       std::swap(subs[index], subs[index - 1]);
     }
@@ -198,7 +201,7 @@ std::string StrReplaceAll(absl::string_view s,
   auto subs = strings_internal::FindSubstitutions(s, replacements);
   std::string result;
   result.reserve(s.size());
-  strings_internal::ApplySubstitutions(s, &subs, &result);
+  strings_internal::ApplySubstitutions(s, &subs, &result); // 执行真正的替换
   return result;
 }
 

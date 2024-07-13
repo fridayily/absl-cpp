@@ -149,6 +149,14 @@ using std::bit_cast;
 
 #else  // defined(__cpp_lib_bit_cast) && __cpp_lib_bit_cast >= 201806L
 
+// sizeof(Dest) == sizeof(Source) 确保源和目标类型具有相同的大小
+// std::is_trivially_copyable<Source>::value 和
+// std::is_trivially_copyable<Dest>::value 确保源和目标类型都是trivially copyable的，
+// 这意味着它们的内存布局简单，可以直接复制
+// std::is_default_constructible<Dest>::value（在没有__builtin_bit_cast的条件下）
+// 确保Dest类型可以默认构造，因为当没有内置的bit_cast时，需要创建一个Dest类型的实例。
+// 如果有内置的__builtin_bit_cast，则直接使用该内置函数进行转换。
+// 否则，使用memcpy来复制源对象的内存到目标对象，实现位级别的转换。
 template <
     typename Dest, typename Source,
     typename std::enable_if<sizeof(Dest) == sizeof(Source) &&
@@ -166,6 +174,8 @@ inline constexpr Dest bit_cast(const Source& source) {
 #else  // ABSL_HAVE_BUILTIN(__builtin_bit_cast)
 inline Dest bit_cast(const Source& source) {
   Dest dest;
+  // std::addressof 它的作用是获取一个对象的真正地址
+  // std::addressof在处理重载的operator&时更为可靠
   memcpy(static_cast<void*>(std::addressof(dest)),
          static_cast<const void*>(std::addressof(source)), sizeof(dest));
   return dest;

@@ -32,6 +32,44 @@ TEST(CrcCordState, Default) {
   EXPECT_EQ(state.Checksum(), absl::crc32c_t{0});
 }
 
+TEST(CrcCordState, Ref){
+  absl::crc_internal::CrcCordState state;
+  auto* rep = state.mutable_rep();
+  rep->prefix_crc.push_back(
+      absl::crc_internal::CrcCordState::PrefixCrc(1000, absl::crc32c_t{1000}));
+  absl::crc_internal::CrcCordState state1 = state;
+  absl::crc_internal::CrcCordState state2 = state;
+  EXPECT_EQ(state.NumChunks(), 1);
+  EXPECT_EQ(state1.NumChunks(), 1);
+  EXPECT_EQ(state2.NumChunks(), 1);
+  rep->prefix_crc.push_back(
+      absl::crc_internal::CrcCordState::PrefixCrc(2000, absl::crc32c_t{2000}));
+
+  EXPECT_EQ(state.NumChunks(), 2);
+  EXPECT_EQ(state1.NumChunks(), 2);
+  EXPECT_EQ(state2.NumChunks(), 2);
+
+
+  auto* rep1 = state1.mutable_rep();
+
+  rep1->prefix_crc.push_back(
+      absl::crc_internal::CrcCordState::PrefixCrc(3000, absl::crc32c_t{3000}));
+
+  EXPECT_EQ(state.NumChunks(), 2);
+  EXPECT_EQ(state1.NumChunks(), 3);
+  EXPECT_EQ(state2.NumChunks(), 2);
+
+
+  // &state.refcounted_rep_->rep
+  // 移动构造函数
+  absl::crc_internal::CrcCordState moved1 = std::move(state1);
+  absl::crc_internal::CrcCordState moved2 = std::move(state2);
+  std::cout << "state1.Checksum() = " << state1.Checksum() << std::endl;
+  std::cout << "state2.Checksum() = " << state2.Checksum() << std::endl;
+
+
+}
+
 TEST(CrcCordState, Normalize) {
   absl::crc_internal::CrcCordState state;
   auto* rep = state.mutable_rep();
@@ -59,7 +97,7 @@ TEST(CrcCordState, Copy) {
   auto* rep = state.mutable_rep();
   rep->prefix_crc.push_back(
       absl::crc_internal::CrcCordState::PrefixCrc(1000, absl::crc32c_t{1000}));
-
+  // 拷贝构造函数
   absl::crc_internal::CrcCordState copy = state;
 
   EXPECT_EQ(state.Checksum(), absl::crc32c_t{1000});
@@ -71,7 +109,7 @@ TEST(CrcCordState, UnsharedSelfCopy) {
   auto* rep = state.mutable_rep();
   rep->prefix_crc.push_back(
       absl::crc_internal::CrcCordState::PrefixCrc(1000, absl::crc32c_t{1000}));
-
+  // 定义的引用，而不是一个构造函数
   const absl::crc_internal::CrcCordState& ref = state;
   state = ref;
 
@@ -83,7 +121,7 @@ TEST(CrcCordState, Move) {
   auto* rep = state.mutable_rep();
   rep->prefix_crc.push_back(
       absl::crc_internal::CrcCordState::PrefixCrc(1000, absl::crc32c_t{1000}));
-
+  // 移动构造函数
   absl::crc_internal::CrcCordState moved = std::move(state);
   EXPECT_EQ(moved.Checksum(), absl::crc32c_t{1000});
 }
@@ -93,7 +131,7 @@ TEST(CrcCordState, UnsharedSelfMove) {
   auto* rep = state.mutable_rep();
   rep->prefix_crc.push_back(
       absl::crc_internal::CrcCordState::PrefixCrc(1000, absl::crc32c_t{1000}));
-
+  // 定义的引用，而不是一个构造函数
   absl::crc_internal::CrcCordState& ref = state;
   state = std::move(ref);
 

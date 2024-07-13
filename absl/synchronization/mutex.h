@@ -206,6 +206,14 @@ class ABSL_LOCKABLE ABSL_ATTRIBUTE_WARN_UNUSED Mutex {
   // Reader-Writer Locking
   // ---------------------------------------------------------------------------
 
+  // Starvation-Free Reader-Writer Lock: 这种类型的锁旨在平衡读取和写入操作的访问，
+  // 确保即使有大量的读取操作，写入操作也能在合理的时间内获得执行机会，反之亦然。
+  // 这样设计可以防止任何一方（读者或写者）因持续被另一方优先而长时间无法获取锁，即避免了饥饿现象。
+  // Non-Reentrant / Non-Recursive: 指出该Mutex不支持递归锁或重入锁。
+  // 递归锁是指同一个线程可以在没有解锁的情况下多次锁定同一把锁，而每次锁定都必须对应一次解锁。
+  // 不支持递归锁的目的是为了防止客户端代码中的潜在错误，
+  // 比如不小心在一个已经持锁的代码块内再次尝试加锁，这可能导致死锁。通过禁止重入，
+  // 强制要求程序员编写清晰且无循环锁依赖的代码，提高了代码的健壮性。
   // A Mutex can also be used as a starvation-free reader-writer lock.
   // Neither read-locks nor write-locks are reentrant/recursive to avoid
   // potential client programming errors.
@@ -288,12 +296,19 @@ class ABSL_LOCKABLE ABSL_ATTRIBUTE_WARN_UNUSED Mutex {
 
   // ---------------------------------------------------------------------------
   // Conditional Critical Regions
+  // 条件临界区域
   // ---------------------------------------------------------------------------
 
   // Conditional usage of a `Mutex` can occur using two distinct paradigms:
   //
   //   * Use of `Mutex` member functions with `Condition` objects.
+  //      使用独立的CondVar抽象
+
   //   * Use of the separate `CondVar` abstraction.
+  //      使用独立的CondVar抽象
+  //      程序员需要显式地在互斥锁的保护下，调用条件变量的等待和通知方法。
+  //      这种方式提供了更多的灵活性，特别是在涉及多个不同条件的复杂同步场景中，
+  //      但同时也增加了管理互斥锁和条件变量之间关系的复杂度。
   //
   // In general, prefer use of `Condition` and the `Mutex` member functions
   // listed below over `CondVar`. When there are multiple threads waiting on
@@ -842,9 +857,20 @@ class Condition {
 #endif
 
   // Function with which to evaluate callbacks and/or arguments.
+  // 表明它指向一个接受一个const Condition*（即一个指向常量Condition对象的指针）作为参数并返回bool类型值的函数
+  // 这个指针常用于设计灵活的回调机制，特别是在需要动态决定如何评估或验证某些条件的场景中
+  // 在一个事件驱动的系统或者复杂的同步机制中，你可能有多种不同的条件需要检查，
+  // 而这些条件的检查逻辑可能在运行时才确定。通过将具体的判断逻辑封装在一个函数中，
+  // 并将该函数的地址赋给eval_，就可以在运行时动态改变或选择条件的评估方式
   bool (*eval_)(const Condition*) = nullptr;
 
   // Either an argument for a function call or an object for a method call.
+  // 1. 传递函数调用的参数：当设计一个通用的回调系统时，arg_可以携带传递给回调函数的参数。
+  // 调用者可以将任意类型的数据地址赋给arg_，并在回调执行时通过类型转换回原本的数据类型。
+
+  // 2. 存储方法调用的对象实例：在某些情况下，如果一个函数需要调用某个对象的方法，
+  // 并且该方法的调用依赖于运行时信息，那么arg_可以用来存储那个对象的实例地址，
+  // 随后通过适当的类型转换来调用方法
   void* arg_ = nullptr;
 
   // Various functions eval_ can point to:

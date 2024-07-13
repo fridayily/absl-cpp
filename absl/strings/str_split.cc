@@ -41,7 +41,7 @@ absl::string_view GenericFind(absl::string_view text,
   if (delimiter.empty() && text.length() > 0) {
     // Special case for empty string delimiters: always return a zero-length
     // absl::string_view referring to the item at position 1 past pos.
-    return absl::string_view(text.data() + pos + 1, 0);
+    return absl::string_view(text.data() + pos + 1, 0); // 虽然都是返回空，但返回的位置不一样
   }
   size_t found_pos = absl::string_view::npos;
   absl::string_view found(text.data() + text.size(),

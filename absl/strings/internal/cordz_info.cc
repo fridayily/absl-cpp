@@ -225,6 +225,7 @@ class CordRepAnalyzer {
 
 }  // namespace
 
+// 返回头指针
 CordzInfo* CordzInfo::Head(const CordzSnapshot& snapshot) {
   ABSL_ASSERT(snapshot.is_snapshot());
 
@@ -253,12 +254,15 @@ void CordzInfo::TrackCord(InlineData& cord, MethodIdentifier method,
                           int64_t sampling_stride) {
   assert(cord.is_tree());
   assert(!cord.is_profiled());
+  // 符合上面的条件则创建一个 CordzInfo 实例，并绑定到 cord
   CordzInfo* cordz_info =
       new CordzInfo(cord.as_tree(), nullptr, method, sampling_stride);
-  cord.set_cordz_info(cordz_info);
+  cord.set_cordz_info(cordz_info); // 保存 cordz_info 实例的指针地址+1 为 int64
+  // 将当前的实例插入 list 中，list 是一个静态的变量，所有 CordzInfo 实例都指向这个 list
   cordz_info->Track();
 }
 
+// 创建一个 CordzInfo 实例，并绑定到 cord，并将 CordzInfo* 添加到 list 中
 void CordzInfo::TrackCord(InlineData& cord, const InlineData& src,
                           MethodIdentifier method) {
   assert(cord.is_tree());
@@ -276,13 +280,17 @@ void CordzInfo::TrackCord(InlineData& cord, const InlineData& src,
   cordz_info->Track();
 }
 
+// src 持有 cordz_info，则创建一个 CordzInfo 实例，并绑定到 cord，添加到 list
+// src 不持有 cordz_info，但cord 持有cordz_info，则从list 中删除一个 CordzInfo，并释放对应的空间
 void CordzInfo::MaybeTrackCordImpl(InlineData& cord, const InlineData& src,
                                    MethodIdentifier method) {
+  // 如何 src 持有 cordz_info，则创建一个 CordzInfo 实例，并绑定到 cord，添加到 list
   if (src.is_profiled()) {
     TrackCord(cord, src, method);
   } else if (cord.is_profiled()) {
-    cord.cordz_info()->Untrack();
-    cord.clear_cordz_info();
+    // 如果 cord 持有cordz_info，
+    cord.cordz_info()->Untrack(); //从List 中删除 cordz_info，并释放 cordz_info 空间
+    cord.clear_cordz_info(); // 之前保存了 cordz_info 实例指针，恢复到默认的 kNullCordzInfo
   }
 }
 
@@ -292,6 +300,8 @@ CordzInfo::MethodIdentifier CordzInfo::GetParentMethod(const CordzInfo* src) {
                                                            : src->method_;
 }
 
+// src->parent_stack_depth_ 非空的话，直接返回src->parent_stack_depth_
+// src->parent_stack_depth_ 为空的话，src->stack_depth_
 size_t CordzInfo::FillParentStack(const CordzInfo* src, void** stack) {
   assert(stack);
   if (src == nullptr) return 0;
@@ -330,14 +340,18 @@ CordzInfo::~CordzInfo() {
   }
 }
 
+// 这里实现一个双向的链表，每次将新节点插入头部
 void CordzInfo::Track() {
   SpinLockHolder l(&list_->mutex);
-
+  // 获取头节点
   CordzInfo* const head = list_->head.load(std::memory_order_acquire);
   if (head != nullptr) {
+    // 头节点非空，将当前节点设置为头节点的前一个节点
     head->ci_prev_.store(this, std::memory_order_release);
   }
+  // 当前节点的下一个节点指向原来头节点
   ci_next_.store(head, std::memory_order_release);
+  // 更新头节点
   list_->head.store(this, std::memory_order_release);
 }
 
@@ -366,6 +380,7 @@ void CordzInfo::Untrack() {
 
   // We can no longer be discovered: perform a fast path check if we are not
   // listed on any delete queue, so we can directly delete this instance.
+  // 如果能安全删除，说明是快照或者全局队列为空
   if (SafeToDelete()) {
     UnsafeSetCordRep(nullptr);
     delete this;
@@ -373,10 +388,14 @@ void CordzInfo::Untrack() {
   }
 
   // We are likely part of a snapshot, extend the life of the CordRep
+  // 如果是快照 ??? 这里应该不是快照，为什么
+  // 延长 CordRep 生命周期
   {
     absl::MutexLock lock(&mutex_);
     if (rep_) CordRep::Ref(rep_);
   }
+  // 上面一句判断了能安全删除就直接删除 CordzInfo 实例
+  // 这里是添加到删除队列，最后析构的时候一起释放对象空间
   CordzHandle::Delete(this);
 }
 
