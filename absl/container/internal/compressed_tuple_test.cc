@@ -18,18 +18,19 @@
 #include <string>
 #include <utility>
 
-#include "gmock/gmock.h"
-#include "gtest/gtest.h"
 #include "absl/container/internal/test_instance_tracker.h"
 #include "absl/memory/memory.h"
 #include "absl/types/any.h"
 #include "absl/types/optional.h"
 #include "absl/utility/utility.h"
+#include "gmock/gmock.h"
+#include "gtest/gtest.h"
 
 // These are declared at global scope purely so that error messages
 // are smaller and easier to understand.
 enum class CallType { kConstRef, kConstMove };
 
+// 根据调用者的类型选择对应的 value
 template <int>
 struct Empty {
   constexpr CallType value() const& { return CallType::kConstRef; }
@@ -47,7 +48,6 @@ struct TwoValues {
   U value2;
 };
 
-
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 namespace container_internal {
@@ -56,11 +56,9 @@ namespace {
 using absl::test_internal::CopyableMovableInstance;
 using absl::test_internal::InstanceTracker;
 
-
 template <typename Releaser>
-struct TestCompressTuple:
-      public ::absl::container_internal::CompressedTuple<Releaser> {
-
+struct TestCompressTuple
+    : public ::absl::container_internal::CompressedTuple<Releaser> {
   template <typename T>
   TestCompressTuple(T&& releaser)
       // 初始化一个类
@@ -68,16 +66,13 @@ struct TestCompressTuple:
     this->id = &releaser;
   }
   Releaser* id;
+};
+
+TEST(SelfCompressedTupleTest, One) {
+  TestCompressTuple<int> test1(1);
+  std::string s = "abcd";
+  TestCompressTuple<std::string> test2(s);
 }
-;
-
-TEST(SelfCompressedTupleTest,One){
-    TestCompressTuple<int> test1(1);
-    std::string s = "abcd";
-    TestCompressTuple<std::string> test2(s);
-
-}
-
 
 TEST(CompressedTupleTest, Sizeof) {
   EXPECT_EQ(sizeof(int), sizeof(CompressedTuple<int>));
@@ -103,6 +98,47 @@ TEST(CompressedTupleTest, OneMoveOnRValueConstructionTemp) {
   EXPECT_EQ(x1.get<0>().value(), 1);
 }
 
+// 测试 Storage 实现
+TEST(CompressedTupleTest, Simple) {
+  CompressedTuple<int, std::string> x0(123, "abc");
+
+  // 定义一个类型，其中的值保存的是 CompressedTuple 对象的个数
+  using type0 = internal_compressed_tuple::compressed_tuple_size<
+      CompressedTuple<int, std::string>>;
+
+  std::cout << " type0::value: " << type0::value << std::endl;
+  std::cout << " type0::value: " << type0::value_type() << std::endl;
+  // 因为 integral_constant 重写 operator()，所以可以当成函数调用
+  std::cout << " type0::value: " << type0() << std::endl;
+
+
+  using type1 =  internal_compressed_tuple::TupleMoveConstructible<false,int,int>;
+  std::cout << " type1::value: " << type1::value << std::endl;
+
+
+  using MyTuple = CompressedTuple<int,std::string>;
+  using type2 =
+      internal_compressed_tuple::TupleMoveConstructible<true,MyTuple,int ,std::string>;
+
+  std::cout << " type2::value: " << type2::value << std::endl;
+
+
+  using Ts3 = std::tuple<int, int>;
+  using Vs3 = std::tuple<int, int>;
+  using type3 =
+      internal_compressed_tuple::TupleMoveConstructible<true, Ts3, Vs3>;
+  std::cout << " type3::value: " << type3::value << std::endl;
+
+  EXPECT_EQ(x0.get<0>(), 123);
+  EXPECT_EQ(x0.get<1>(), "abc");
+
+  struct A {
+    std::string s = "xyz";
+  };
+  A a;
+  CompressedTuple<int, std::string, A> x1(123, "abc", a);
+  EXPECT_EQ(x1.get<2>().s, "xyz");
+}
 TEST(CompressedTupleTest, OneMoveOnRValueConstructionMove) {
   InstanceTracker tracker;
 
@@ -141,14 +177,20 @@ TEST(CompressedTupleTest, OneMoveOnRValueConstructionWithIncompleteType) {
   InstanceTracker tracker;
   CopyableMovableInstance i1(1);
   Empty<0> empty;
-  struct DerivedType : IncompleteType {int value = 0;};
+  struct DerivedType : IncompleteType {
+    int value = 0;
+  };
   DerivedType fd;
   fd.value = 7;
 
+  // MakeWithIncomplete 一次 move
+  // MakeWithIncomplete.CompressedTuple 一次 move
   CompressedTuple<CopyableMovableInstance, IncompleteType&, Empty<0>> x1 =
       MakeWithIncomplete(std::move(i1), fd, empty);
 
   EXPECT_EQ(x1.get<0>().value(), 1);
+  // x1.get<1>() 是 IncompleteType 类型
+  // get 是一个模板函数，返回指定索引的元素
   EXPECT_EQ(static_cast<DerivedType&>(x1.get<1>()).value, 7);
 
   EXPECT_EQ(tracker.copies(), 0);
@@ -165,11 +207,23 @@ TEST(CompressedTupleTest,
   EXPECT_EQ(x1.get<0>().value(), 1);
   EXPECT_EQ(x1.get<1>().value(), 2);
   EXPECT_EQ(tracker.instances(), 3);
+  // 这段注释强调了C++模板元编程中一个微妙但重要的细节，即在使用
+  // 变长模板参数（variadic template arguments）和大括号初始化时，
+  // 编译器的类型推导机制可能与程序员的直觉相悖，导致非最优的代码行为。
   // We are forced into the `const Ts&...` constructor (invoking copies)
   // because we need it to deduce the type of `{}`.
   // std::tuple also has this behavior.
   // Note, this test is proof that this is expected behavior, but it is not
   // _desired_ behavior.
+  // 当你使用 {} 时，C++ 编译器尝试推导出 {} 的类型，但是由于 {}
+  // 可以表示任何类型的
+  //    默认构造，编译器无法确定具体的类型。因此，为了处理这种不确定性，
+  //    编译器使用 const Ts&...
+  //    构造函数，这实际上意味着每个参数都会被拷贝构造或引用
+  // std::tuple
+  // 和其他标准库容器也具有类似的行为。这是因为标准库设计时考虑了通用性和灵活性，
+  // 允许用户使用各种类型的构造和初始化方式。然而，这种通用性有时会导致意外的拷贝构造，
+  // 尤其是在处理可移动类型时，这可能不是最高效的选择
   EXPECT_EQ(tracker.copies(), 1);
   EXPECT_EQ(tracker.moves(), 0);
 }
@@ -292,6 +346,26 @@ TEST(CompressedTupleTest, Nested) {
   EXPECT_TRUE((std::is_empty<CompressedTuple<Empty<0>, Empty<1>>>::value));
 
   // Make sure everything still works when things are nested.
+  /*
+    +---------------------+
+    | CompressedTuple     |
+    |                     |
+    | +------------------+ |
+    | | Empty<0>         | |
+    | |                  | |
+    | +------------------+ |
+    | +------------------+ |
+    | | CompressedTuple  | |
+    | |                  | |
+    | | +---------------+ | |
+    | | | Empty<0>      | | |
+    | | |               | | |
+    | | +---------------+ | |
+    | +------------------+ |
+    +---------------------+
+   */
+  // CT_Empty 本身就是一个 CompressedTuple 的实例，它内部包含了 Empty<0>
+  // 类型的一个实例。
   struct CT_Empty : CompressedTuple<Empty<0>> {};
   CompressedTuple<Empty<0>, CT_Empty> nested_empty;
   auto contained = nested_empty.get<0>();
@@ -323,12 +397,14 @@ TEST(CompressedTupleTest, NoElements) {
 }
 
 TEST(CompressedTupleTest, MoveOnlyElements) {
+  // str_tup 是一个 CompressedTuple 对象
   CompressedTuple<std::unique_ptr<std::string>> str_tup(
       absl::make_unique<std::string>("str"));
 
+  // x 是一个 CompressedTuple 对象，其中一个元素用 str_tup 构造
   CompressedTuple<CompressedTuple<std::unique_ptr<std::string>>,
                   std::unique_ptr<int>>
-  x(std::move(str_tup), absl::make_unique<int>(5));
+      x(std::move(str_tup), absl::make_unique<int>(5));
 
   EXPECT_EQ(*x.get<0>().get<0>(), "str");
   EXPECT_EQ(*x.get<1>(), 5);
@@ -355,11 +431,14 @@ TEST(CompressedTupleTest, AnyElements) {
   EXPECT_EQ(absl::any_cast<int>(x.get<0>()), 5);
   EXPECT_EQ(absl::any_cast<std::string>(x.get<1>()), "str");
 
+  // 将 a 的值更新为 0.5
   a = 0.5f;
   EXPECT_EQ(absl::any_cast<float>(x.get<1>()), 0.5);
 }
 
 TEST(CompressedTupleTest, Constexpr) {
+  // 成员变量 v 在结构体定义中被初始化，这使得默认构造函数不再是默认生成的，
+  // 而是用户定义的，尽管它使用了 = default
   struct NonTrivialStruct {
     constexpr NonTrivialStruct() = default;
     constexpr int value() const { return v; }
@@ -395,6 +474,7 @@ TEST(CompressedTupleTest, Constexpr) {
       non_trivial = {};
   constexpr CallType non_trivial0 = non_trivial.get<0>().value();
   constexpr int non_trivial1 = non_trivial.get<1>().value();
+  // non_trivial2 可能为 nullopt 或者是 int
   constexpr absl::optional<int> non_trivial2 = non_trivial.get<2>();
 
   EXPECT_EQ(non_trivial0, CallType::kConstRef);
@@ -417,6 +497,7 @@ TEST(CompressedTupleTest, Constexpr) {
 
 #if defined(__clang__) || defined(__GNUC__)
 TEST(CompressedTupleTest, EmptyFinalClass) {
+  // final 类不能继承，所以 S 作为CompressedTuple 的一个成员变量
   struct S final {
     int f() const { return 5; }
   };
@@ -429,6 +510,17 @@ TEST(CompressedTupleTest, EmptyFinalClass) {
 TEST(CompressedTupleTest, DISABLED_NestedEbo) {
   struct Empty1 {};
   struct Empty2 {};
+  CompressedTuple<Empty1, CompressedTuple<Empty2>, int> x;
+  CompressedTuple<Empty1, Empty2, int> y;
+  // Currently fails with sizeof(x) == 8, sizeof(y) == 4.
+  EXPECT_EQ(sizeof(x), sizeof(y));
+}
+
+TEST(CompressedTupleTest, NestedEbo) {
+  struct Empty1 {};
+  struct Empty2 {};
+  CompressedTuple<Empty2> e;
+  EXPECT_EQ(sizeof(e), 1);
   CompressedTuple<Empty1, CompressedTuple<Empty2>, int> x;
   CompressedTuple<Empty1, Empty2, int> y;
   // Currently fails with sizeof(x) == 8, sizeof(y) == 4.

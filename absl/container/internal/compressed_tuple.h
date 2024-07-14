@@ -90,6 +90,8 @@ struct uses_inheritance {};
 
 // !std::is_base_of<uses_inheritance, T>::value：检查 T
 // 是否不是从 uses_inheritance 继承的
+// 如果 ShouldUseBase 返回 true ，则 Storage 会继承 T
+// 否则 Storage 会把 T 当成一个成员函数
 template <typename T>
 constexpr bool ShouldUseBase() {
   return std::is_class<T>::value && std::is_empty<T>::value &&
@@ -184,8 +186,11 @@ struct ABSL_INTERNAL_COMPRESSED_TUPLE_DECLSPEC CompressedTupleImpl<
     : uses_inheritance,
       Storage<Ts, std::integral_constant<size_t, I>::value>... {
   constexpr CompressedTupleImpl() = default;
-  // std::in_place 是C++17标准中引入的一个构造标记，主要用于在容器或复合类型中直接构造对象，
+  // std::in_place 是C++17 标准中引入的一个构造标记，主要用于在容器或复合类型中直接构造对象，
   // 而不是先构造一个临时对象再进行移动或复制。
+  // 最后的 ... 把 args 参数包中的每一个参数都分别传递给 Storage<Ts, I> 的各个实例的构造函数。
+  // 例如 CompressedTuple<int, Empty<0>, S> x(7, {}, S{"ABC"});
+  //  会调用三次 Storage
   template <typename... Vs>
   explicit constexpr CompressedTupleImpl(absl::in_place_t, Vs&&... args)
       : Storage<Ts, I>(absl::in_place, std::forward<Vs>(args))... {}
@@ -199,6 +204,7 @@ struct ABSL_INTERNAL_COMPRESSED_TUPLE_DECLSPEC CompressedTupleImpl<
     // We use the dummy identity function as above...
     : Storage<Ts, std::integral_constant<size_t, I>::value, false>... {
   constexpr CompressedTupleImpl() = default;
+  // 在编译期计算
   template <typename... Vs>
   explicit constexpr CompressedTupleImpl(absl::in_place_t, Vs&&... args)
       : Storage<Ts, I, false>(absl::in_place, std::forward<Vs>(args))... {}
@@ -219,15 +225,34 @@ constexpr bool ShouldAnyUseBase() {
       Or({std::integral_constant<bool, ShouldUseBase<Ts>()>()...})){};
 }
 
+// std::is_reference<T>::value：首先检查T是否是一个引用类型。如果是引用类型，
+// 那么我们关心的是V是否可以直接赋值给T
+// std::is_convertible<V, T>：如果T是引用类型，那么使用std::is_convertible
+// 检查V是否可以隐式转换为T，即V是否可以直接赋值给T
+// 当std::is_convertible<T&&, U&>::value为true时，这意味着T&&可以被转换为U&，
+// 也就是说，T&& 可以绑定到 U& 上
+// 如果 U 有移动构造函数，可以从 T&& 构造
+
+// std::is_constructible<T, V&&>：如果T不是引用类型，
+// 那么使用std::is_constructible检查V是否可以通过右值引用V&&构造T。
+// 这意味着T可以从V的移动版本构造
+
+// std::conditional：根据T是否是引用类型，选择使用std::is_convertible
+// 或std::is_constructible。如果T是引用类型，使用std::is_convertible；否则，使用std::is_constructible
 template <typename T, typename V>
 using TupleElementMoveConstructible =
     typename std::conditional<std::is_reference<T>::value,
                               std::is_convertible<V, T>,
                               std::is_constructible<T, V&&>>::type;
 
+// 其默认行为是返回std::false_type，表示元组不可从给定类型移动构造
 template <bool SizeMatches, class T, class... Vs>
 struct TupleMoveConstructible : std::false_type {};
 
+// 当 T 是 CompressedTuple<Ts...> 且 sizeof...(Ts) == sizeof...(Vs) 特化才生效
+// 此时可以检查 CompressedTuple 的每个元素类型 Ts 是否能够从对应的Vs类型移动构造
+// 如果 T 不是CompressedTuple，那么这个特化就不适用
+// 最后一个 ... 会解包 Ts,Vs, 并用 TupleElementMoveConstructible 检查
 template <class... Ts, class... Vs>
 struct TupleMoveConstructible<true, CompressedTuple<Ts...>, Vs...>
     : std::integral_constant<
@@ -237,6 +262,10 @@ struct TupleMoveConstructible<true, CompressedTuple<Ts...>, Vs...>
 template <typename T>
 struct compressed_tuple_size;
 
+// std::integral_constant<int, 42> my_const;
+// std::cout << my_const.value << std::endl;  // 输出 42
+// sizeof..(Es) 在编译时计算参数数量
+// 只有在 T 是 CompressedTuple<Es...> 时生效
 template <typename... Es>
 struct compressed_tuple_size<CompressedTuple<Es...>>
     : public std::integral_constant<std::size_t, sizeof...(Es)> {};
@@ -291,9 +320,13 @@ class ABSL_INTERNAL_COMPRESSED_TUPLE_DECLSPEC CompressedTuple
 #else
   constexpr CompressedTuple() = default;
 #endif
+  // 这里用 const Ts& 修饰，说明每个参数都会被拷贝构造或引用，而不会被 move
   explicit constexpr CompressedTuple(const Ts&... base)
       : CompressedTuple::CompressedTupleImpl(absl::in_place, base...) {}
 
+  // 下面构造函数可用于移动构造
+  // First：第一个模板参数，代表CompressedTuple中第一个元素的类型
+  // Vs...：后续可变参数包，代表CompressedTuple中剩余元素的类型。
   template <typename First, typename... Vs,
             absl::enable_if_t<
                 absl::conjunction<

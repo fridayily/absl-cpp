@@ -136,6 +136,8 @@ class BaseCountedInstance {
   bool is_live_ = true;
 
   // Number of instances.
+  // 静态成员变量属于整个类，而不是类的某个特定实例。
+  // 这意味着不论创建了多少个类的实例，静态成员变量在内存中只有一个副本，所有实例共享这个副本。
   static int num_instances_;
 
   // Number of live instances (those that have not been moved away from.)
@@ -171,6 +173,7 @@ class InstanceTracker {
     if (live_instances() != 0) std::abort();
   }
 
+  // 包括那些仍然有效和那些已经被移动（move semantics）的实例
   // Returns the number of BaseCountedInstance instances both containing valid
   // values and those moved away from compared to when the InstanceTracker was
   // constructed
@@ -208,6 +211,8 @@ class InstanceTracker {
   // current values, so that subsequent Get*() calls for moves, copies,
   // comparisons, and swaps will compare to the situation at the point of this
   // call.
+  // 计数为这两变量的差值
+  // 这里使两变量在相同，即差值重新为0
   void ResetCopiesMovesSwaps() {
     start_moves_ = BaseCountedInstance::num_moves_;
     start_copies_ = BaseCountedInstance::num_copies_;
@@ -268,6 +273,13 @@ class MovableOnlyInstance : public BaseCountedInstance {
 
   static bool supports_move() { return true; }
 };
+
+
+//  ResourceManager r1(100); // 正常构造
+//  ResourceManager r2 = std::move(r1); // 使用移动构造函数
+//  ResourceManager r1(100); // 正常构造
+//  ResourceManager r2;      // 默认构造
+//  r2 = std::move(r1);      // 使用移动赋值运算符
 
 }  // namespace test_internal
 ABSL_NAMESPACE_END

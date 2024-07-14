@@ -17,6 +17,8 @@
 namespace absl {
 ABSL_NAMESPACE_BEGIN
 namespace test_internal {
+// 静态变量在内外初始化
+// 静态成员变量的初始化顺序遵循它们在类体外声明的顺序，而不是在类体内声明的顺序。
 int BaseCountedInstance::num_instances_ = 0;
 int BaseCountedInstance::num_live_instances_ = 0;
 int BaseCountedInstance::num_moves_ = 0;
