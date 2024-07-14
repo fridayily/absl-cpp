@@ -442,6 +442,7 @@ struct Rank1 : Rank0 {};
 // 期望Releaser类型能够接受一个absl::string_view类型的参数。
 // 这通过typename = ::absl::base_internal::invoke_result_t<Releaser,
 // absl::string_view>实现
+// typename =语法用于模板参数列表中，为类型模板参数提供一个默认值
 template <typename Releaser, typename = ::absl::base_internal::invoke_result_t<
                                  Releaser, absl::string_view>>
 void InvokeReleaser(Rank1, Releaser&& releaser, absl::string_view data) {

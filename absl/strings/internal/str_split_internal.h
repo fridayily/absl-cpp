@@ -212,6 +212,8 @@ struct HasEmplace : std::false_type {};
 // 但这一切都在类型系统层面进行，没有实际的函数调用或对象构造发生。
 // decltype 则用来捕获这个调用的返回类型
 
+// decltype(std::declval<T>().emplace()) 会返回emplace() 函数的返回类型
+
 // int n = 0;
 // decltype(n) m = n; m 是 int 类型  n 可以是一个函数
 template <typename T>

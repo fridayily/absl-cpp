@@ -1114,6 +1114,8 @@ absl::Nonnull<CordRep*> NewExternalRep(absl::string_view data,
                                        Releaser&& releaser) {
   assert(!data.empty());
   using ReleaserType = absl::decay_t<Releaser>; // 去除了顶层cv限定
+  // std::forward 保留原有 releaser 的类型
+  // 进而选择不同的 CordRepExternalImpl 构造函数
   CordRepExternal* rep = new CordRepExternalImpl<ReleaserType>(
       std::forward<Releaser>(releaser), 0);
   InitializeCordRepExternal(data, rep);

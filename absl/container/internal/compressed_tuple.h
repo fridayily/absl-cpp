@@ -211,6 +211,8 @@ struct ABSL_INTERNAL_COMPRESSED_TUPLE_DECLSPEC CompressedTupleImpl<
   friend CompressedTuple<Ts...>;
 };
 
+// 这里的定义什么意思？
+// 符合语法规范吗？
 std::false_type Or(std::initializer_list<std::false_type>);
 std::true_type Or(std::initializer_list<bool>);
 
@@ -221,6 +223,8 @@ std::true_type Or(std::initializer_list<bool>);
 // 每个对象表示一个 Ts 类型是否满足 ShouldUseBase 的条件
 template <typename... Ts>
 constexpr bool ShouldAnyUseBase() {
+  // decltype 返回一个类型
+  //  {} 调用返回类型的默认构造函数
   return decltype(
       Or({std::integral_constant<bool, ShouldUseBase<Ts>()>()...})){};
 }
