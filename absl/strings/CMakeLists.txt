@@ -1195,3 +1195,35 @@ absl_cc_test(
     absl::strings
     GTest::gmock_main
 )
+
+absl_cc_test(
+    NAME
+        string_view_benchmark
+    SRCS
+        "string_view_benchmark.cc"
+    COPTS
+        ${ABSL_TEST_COPTS}
+    DEPS
+        absl::string_view
+        absl::strings
+        absl::core_headers
+        absl::raw_logging_internal
+        benchmark::benchmark_main
+
+)
+#
+#cc_test(
+#        name = "string_view_benchmark",
+#        srcs = ["string_view_benchmark.cc"],
+#        copts = ABSL_TEST_COPTS,
+#        tags = ["benchmark"],
+#        visibility = ["//visibility:private"],
+#        deps = [
+#        ":string_view",
+#        ":strings",
+#        "//absl/base:core_headers",
+#        "//absl/base:raw_logging_internal",
+#        "@com_github_google_benchmark//:benchmark_main",
+#        "@com_google_googletest//:gtest",
+#        ],
+#)

@@ -391,6 +391,14 @@ function(absl_cc_test)
     return()
   endif()
 
+  # 如果ARGN = "NAME;a;SRCS;b;COPTS;c;DEFINES;d;LINKOPTS;e;DEPS;f"
+  # 执行完后
+  # ABSL_CC_TEST_NAME = a
+  # ABSL_CC_TEST_SRCS = b
+  # ABSL_CC_TEST_COPTS = c
+  # ABSL_CC_TEST_DEFINES = d
+  # ABSL_CC_TEST_LINKOPTS = e
+  # ABSL_CC_TEST_DEPS = f
   cmake_parse_arguments(ABSL_CC_TEST
     ""
     "NAME"

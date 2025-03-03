@@ -87,6 +87,22 @@ constexpr ErrorTest kErrorTests[]{
      absl::IsUnauthenticated},
 };
 
+TEST(Status,TraceExample){
+  SCOPED_TRACE("Starting the test.");
+
+  int a = 1;
+  int b = 2;
+  int c = 3;
+
+  SCOPED_TRACE("Checking equality.");
+  EXPECT_EQ(a, b);  // 这个断言会失败
+
+  EXPECT_EQ(a, c);  // 这个断言会失败
+
+  SCOPED_TRACE("Checking addition.");
+  EXPECT_EQ(a + b, 3);  // 这个断言会通过
+}
+
 TEST(Status, CreateAndClassify) {
   for (const auto& test : kErrorTests) {
     SCOPED_TRACE(absl::StatusCodeToString(test.code));

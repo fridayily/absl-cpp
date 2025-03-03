@@ -125,6 +125,12 @@ TEST_P(ParseFlagFromOtherIntegerTest, YieldsExpectedValue) {
 
 using ParseFlagFromEnumeratorTest =
     TestWithParam<std::tuple<absl::string_view, absl::LogSeverity>>;
+// INSTANTIATE_TEST_SUITE_P(
+//    NameOfInstantiation, 实例化名称，用于区分不同的实例化。
+//    TestSuiteName, 测试套件的名称。
+//    ParamGenerator, 参数生成器，用于生成测试用例的参数
+//    NameGenerator = ::testing::internal::GenerateTestSuiteName2
+//);
 INSTANTIATE_TEST_SUITE_P(
     Instantiation, ParseFlagFromEnumeratorTest,
     Values(std::make_tuple("INFO", absl::LogSeverity::kInfo),

@@ -49,6 +49,7 @@ ABSL_NAMESPACE_BEGIN
 namespace macros_internal {
 // Note: this internal template function declaration is used by ABSL_ARRAYSIZE.
 // The function doesn't need a definition, as we only use its type.
+// -> 指定返回类型为 char(&)[N] 不是 lambda 函数，一个长度为 N 的字符数组的引用
 template <typename T, size_t N>
 auto ArraySizeHelper(const T (&array)[N]) -> char (&)[N];
 }  // namespace macros_internal

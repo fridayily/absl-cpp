@@ -106,7 +106,7 @@ TEST(StringViewTest, Ctor) {
 
     // const char* with length.
     absl::string_view s21(hello, 4);
-    EXPECT_TRUE(s21.data() == hello);
+    EXPECT_TRUE(s21.data() == hello); // s21 中还是保存完整的数据，但length 是 4
     EXPECT_EQ(4u, s21.length());
 
     // Not recommended, but valid C++
@@ -148,6 +148,14 @@ TEST(StringViewTest, Ctor) {
   }
 
   // TODO(mec): absl::string_view(const absl::string_view&);
+  {
+    const char* hello = "hello";
+    absl::string_view s40(hello);
+    absl::string_view s41(s40);
+
+    EXPECT_EQ(s40,s41);
+
+  }
 }
 
 TEST(StringViewTest, Swap) {

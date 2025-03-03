@@ -75,6 +75,8 @@ constexpr static auto kFixedArrayUseDefault = static_cast<size_t>(-1);
 template <typename T, size_t N = kFixedArrayUseDefault,
           typename A = std::allocator<T>>
 class FixedArray {
+  // 如果是 array 类型，判断 array[0] 的长度大于0
+  // 如果不是 array 类型，直接就是 true
   static_assert(!std::is_array<T>::value || std::extent<T>::value > 0,
                 "Arrays with unknown bounds cannot be used with FixedArray.");
 

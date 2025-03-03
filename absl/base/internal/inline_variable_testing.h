@@ -26,9 +26,11 @@ struct Foo {
 };
 
 ABSL_INTERNAL_INLINE_CONSTEXPR(Foo, inline_variable_foo, {});
+// inline constexpr ::absl::internal::type_identity_t<Foo> inline_variable_foo = {}
 ABSL_INTERNAL_INLINE_CONSTEXPR(Foo, other_inline_variable_foo, {});
 
 ABSL_INTERNAL_INLINE_CONSTEXPR(int, inline_variable_int, 5);
+// inline constexpr ::absl::internal::type_identity_t<int> inline_variable_int = 5
 ABSL_INTERNAL_INLINE_CONSTEXPR(int, other_inline_variable_int, 5);
 
 ABSL_INTERNAL_INLINE_CONSTEXPR(void(*)(), inline_variable_fun_ptr, nullptr);

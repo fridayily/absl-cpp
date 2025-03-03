@@ -35,9 +35,11 @@ absl::Nullable<const char*> memmatch(absl::Nullable<const char*> phaystack,
                                      size_t haylen,
                                      absl::Nullable<const char*> pneedle,
                                      size_t neelen) {
+  // 待查找的字符串长度为0，则返回整个原始字符串
   if (0 == neelen) {
     return phaystack;  // even if haylen is 0
   }
+  // 待查找字符大于原始字符串，返回空
   if (haylen < neelen) return nullptr;
 
   const char* match;
@@ -51,10 +53,12 @@ absl::Nullable<const char*> memmatch(absl::Nullable<const char*> phaystack,
       // hayend - phaystack 能查找的长度
       (match = static_cast<const char*>(memchr(
            phaystack, pneedle[0], static_cast<size_t>(hayend - phaystack))))) {
+    // 如果第一个字符串匹配成功后，之后的字符串全部匹配，则直接返回
     if (memcmp(match, pneedle, neelen) == 0)
       return match;
     else
       phaystack = match + 1;
+      // 如果匹配失败，则从本次查找到的位置加1后继续查找
   }
   return nullptr;
 }
@@ -66,6 +70,7 @@ void WritePadding(std::ostream& o, size_t pad) {
   while (pad) {
     // 一次性填充 n 个字符
     size_t n = std::min(pad, sizeof(fill_buf));
+    // 将 一个 fill_buf 的数据写到流中
     o.write(fill_buf, static_cast<std::streamsize>(n));
     pad -= n;
   }
@@ -77,6 +82,7 @@ class LookupTable {
   // to the ASCII code of that character. This is used by
   // the find_.*_of methods below to tell whether or not a character is in
   // the lookup table in constant time.
+  // 将传入的字符串放到一个表中，如果 wanted 中存在某个字符，则相应索引位置置为 true
   explicit LookupTable(string_view wanted) {
     for (char c : wanted) {
       table_[Index(c)] = true;
@@ -130,18 +136,26 @@ string_view::size_type string_view::find(string_view s,
     if (empty() && pos == 0 && s.empty()) return 0;
     return npos;
   }
+  // 从 this 的 ptr_ 加 pos 开始查找
+  // 第二个参数 是可以查找的总长度
+  // 第三参数 子串开始位置
+  // 第四参数 子串长度
   const char* result = memmatch(ptr_ + pos, length_ - pos, s.ptr_, s.length_);
   return result ? static_cast<size_type>(result - ptr_) : npos;
 }
 
+// 如果 pos 是0 就是 find_first_of
+// 只查找一个字符
 string_view::size_type string_view::find(char c, size_type pos) const noexcept {
   if (empty() || pos >= length_) {
     return npos;
   }
+  // 从 ptr_ + pos 的位置开始到 length_ - pos 的区间查找c
   const char* result =
       static_cast<const char*>(memchr(ptr_ + pos, c, length_ - pos));
   return result != nullptr ? static_cast<size_type>(result - ptr_) : npos;
 }
+
 
 string_view::size_type string_view::rfind(string_view s,
                                           size_type pos) const noexcept {
@@ -157,6 +171,7 @@ string_view::size_type string_view::rfind(char c,
                                           size_type pos) const noexcept {
   // Note: memrchr() is not available on Windows.
   if (empty()) return npos;
+  // 选定字符串的最后一个字符作为开始地址
   for (size_type i = std::min(pos, length_ - 1);; --i) {
     if (ptr_[i] == c) {
       return i;
@@ -182,6 +197,7 @@ string_view::size_type string_view::find_first_of(
   return npos;
 }
 
+// 返回第一个不出现在 s 中的第一个字符的位置
 string_view::size_type string_view::find_first_not_of(
     string_view s, size_type pos) const noexcept {
   if (empty()) return npos;

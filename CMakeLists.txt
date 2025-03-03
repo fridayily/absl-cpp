@@ -210,7 +210,7 @@ if(WITH_EXAMPLES)
 endif()
 
 
-set(ABSL_ENABLE_INSTALL OFF)
+set(ABSL_ENABLE_INSTALL ON)
 if(ABSL_ENABLE_INSTALL)
   # absl:lts-remove-begin(system installation is supported for LTS releases)
   # We don't support system-wide installation
@@ -307,12 +307,21 @@ endif()  # ABSL_ENABLE_INSTALL
 
 set(SELF_TEST ON)
 if(SELF_TEST)
-  find_package(GTest REQUIRED)
+#  find_package(GTest REQUIRED)
   add_executable(example_self example/example_self.cc)
   target_link_libraries(example_self GTest::gtest GTest::gtest_main)
 
   add_executable(empty_base_optimization example/empty_base_optimization.cpp)
   target_link_libraries(empty_base_optimization GTest::gtest GTest::gtest_main)
 
+  add_executable(example_benchmark  example/example_benchmark.cpp)
+  target_link_libraries(example_benchmark benchmark::benchmark)
+
+
+  add_executable(str_split_benchmark  example/str_split_benchmark.cpp)
+  target_link_libraries(str_split_benchmark benchmark::benchmark)
+
+add_executable(arg_benchmark  example/arg_benchmark.cpp)
+target_link_libraries(arg_benchmark benchmark::benchmark)
 
 endif ()

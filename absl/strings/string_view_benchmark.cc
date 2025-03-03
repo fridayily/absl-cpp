@@ -12,8 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-#include "absl/strings/string_view.h"
-
 #include <algorithm>
 #include <cstddef>
 #include <cstdint>
@@ -23,11 +21,12 @@
 #include <unordered_set>
 #include <vector>
 
-#include "benchmark/benchmark.h"
 #include "absl/base/attributes.h"
 #include "absl/base/internal/raw_logging.h"
 #include "absl/base/macros.h"
 #include "absl/strings/str_cat.h"
+#include "absl/strings/string_view.h"
+#include "benchmark/benchmark.h"
 
 namespace {
 
@@ -68,6 +67,7 @@ void BM_EqualIdentical(benchmark::State& state) {
   std::string x(state.range(0), 'a');
   DoEqualityComparisons(state, x, x);
 }
+
 BENCHMARK(BM_EqualIdentical)->DenseRange(0, 3)->Range(4, 1 << 10);
 
 void BM_EqualSame(benchmark::State& state) {
@@ -234,6 +234,7 @@ void BM_rfind_one_char(benchmark::State& state) {
     benchmark::DoNotOptimize(s.rfind('x'));  // not present
   }
 }
+
 BENCHMARK(BM_rfind_one_char)->Range(1, 1 << 20);
 
 void BM_worst_case_find_first_of(benchmark::State& state, int haystack_len) {
@@ -379,4 +380,8 @@ void BM_AppendToStringNative(benchmark::State& state) {
 }
 BENCHMARK(BM_AppendToStringNative)->Range(1 << 3, 1 << 12);
 
+
+
+
+//BENCHMARK_MAIN();
 }  // namespace

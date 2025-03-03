@@ -77,6 +77,7 @@ def StripContentBetweenTags(filename, strip_begin_tag, strip_end_tag):
       raise Exception('{}: imbalanced strip begin ({}) and '
                       'end ({}) tags'.format(filename, strip_begin_tag,
                                              strip_end_tag))
+    # 先执行 end + len(strip_end_tag)
     content = content.replace(content[begin:end + len(strip_end_tag)], '')
 
   f = open(filename, 'w')

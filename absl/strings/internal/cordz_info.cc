@@ -355,7 +355,7 @@ void CordzInfo::Track() {
   list_->head.store(this, std::memory_order_release);
 }
 
-void CordzInfo::Untrack() {
+void CordzInfo:: Untrack() {
   ODRCheck();
   {
     SpinLockHolder l(&list_->mutex);

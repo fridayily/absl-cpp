@@ -351,7 +351,15 @@ class string_view {
   constexpr const_pointer data() const noexcept { return ptr_; }
 
   // Modifiers
-
+  // __builtin_expect(exp,1) 表达式很可能为真
+  // ((__builtin_expect(false || ((n <= length_)), true))
+  //     ? static_cast<void>(0)
+  //     : [] {
+  //         (static_cast<bool>(false && "n <= length_")
+  //              ? void(0)
+  //              : __assert_fail("false && \"n <= length_\"", "_file_name_", 360,
+  //                              "_function_name_"));
+  //       }())
   // string_view::remove_prefix()
   //
   // Removes the first `n` characters from the `string_view`. Note that the
@@ -397,6 +405,7 @@ class string_view {
     if (ABSL_PREDICT_FALSE(pos > length_)) {
       base_internal::ThrowStdOutOfRange("absl::string_view::copy");
     }
+    // 剩余可拷贝长度
     size_type rlen = (std::min)(length_ - pos, n);
     if (rlen > 0) {
       const char* start = ptr_ + pos;
@@ -571,7 +580,7 @@ class string_view {
   }
 
   // string_view::find_first_not_of()
-  //
+  // 在 s 中查找第一个
   // Finds the first occurrence of any of the characters not in `s` within the
   // `string_view`, returning the start position of the first non-match, or
   // `npos` if no non-match was found.

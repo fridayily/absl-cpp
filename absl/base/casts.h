@@ -175,7 +175,8 @@ inline constexpr Dest bit_cast(const Source& source) {
 inline Dest bit_cast(const Source& source) {
   Dest dest;
   // std::addressof 它的作用是获取一个对象的真正地址
-  // std::addressof在处理重载的operator&时更为可靠
+  // 在处理重载的operator&时更为可靠
+  // 即使在对象是左值引用时也能正确地返回其地址
   memcpy(static_cast<void*>(std::addressof(dest)),
          static_cast<const void*>(std::addressof(source)), sizeof(dest));
   return dest;
